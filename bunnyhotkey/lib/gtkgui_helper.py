@@ -329,6 +329,42 @@ def dt_popup(c):
     pop.popup()
 
 
+def cal_pick(c, initial=False):
+    if c.get("setting"):
+        return            # the script set the value; keep its range
+    w = c["w"]
+    y, m0, d = w.get_date()
+    day = dt.datetime(y, m0 + 1, d)
+    shift = False
+    if not initial:
+        ok, state = Gtk.get_current_event_state()
+        shift = bool(ok and state & Gdk.ModifierType.SHIFT_MASK)
+    rng = c.get("range")
+    if shift and rng and rng[0]:
+        anchor = c.get("anchor", rng[0])
+        c["range"] = sorted([anchor, day])
+    elif not (initial and rng):
+        c["anchor"] = day
+        c["range"] = [day, day]
+    cal_mark(c)
+
+
+def cal_mark(c):
+    w = c["w"]
+    w.clear_marks()
+    lo, hi = c.get("range") or (None, None)
+    if not lo:
+        return
+    y, m0, _ = w.get_date()
+    for dd in range(1, 32):
+        try:
+            day = dt.datetime(y, m0 + 1, dd)
+        except ValueError:
+            break
+        if lo <= day <= hi:
+            w.mark_day(dd)
+
+
 def cal_value(cal):
     y, m0, d = cal.get_date()
     return "%04d%02d%02d" % (y, m0 + 1, d)
@@ -969,6 +1005,9 @@ def value_of(c):
     if t == "DateTime":
         return stamp(c["dt"]) if c.get("dt") else ""
     if t == "MonthCal":
+        if c.get("multi") and c.get("range") and c["range"][0]:
+            lo, hi = c["range"]
+            return lo.strftime("%Y%m%d") + "-" + hi.strftime("%Y%m%d")
         v = cal_value(w)
         return v + "-" + v if c.get("multi") else v
     if t == "TreeView":
@@ -1010,7 +1049,23 @@ def set_value(c, v):
     elif t == "DateTime":
         dt_set(c, parse_stamp(v) if str(v) else None)
     elif t == "MonthCal":
-        cal_set(w, v)
+        sv = str(v)
+        if c.get("multi") and "-" in sv:
+            lo, hi = sv.split("-", 1)
+            c["range"] = [parse_stamp(lo), parse_stamp(hi or lo)]
+            c["anchor"] = c["range"][0]
+            c["setting"] = True
+            try:
+                cal_set(w, lo)
+            finally:
+                c["setting"] = False
+            cal_mark(c)
+        else:
+            cal_set(w, sv)
+            if c.get("multi"):
+                d = parse_stamp(sv)
+                c["range"] = [d, d]
+                cal_mark(c)
     elif t == "Hotkey":
         c["hk"] = str(v)
         w.set_text(hk_display(c["hk"]))
@@ -1352,10 +1407,13 @@ def make(win, cid, t, opts):
         lbl.set_margin_start(6)
         lbl.set_margin_top(2)
         lbl.set_margin_bottom(2)
+        parts = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        parts.pack_start(lbl, True, True, 0)
         w = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         w.pack_start(Gtk.Separator(), False, False, 0)
-        w.pack_start(lbl, False, False, 0)
+        w.pack_start(parts, False, False, 0)
         c["label"] = lbl
+        c["parts"], c["partbox"] = [lbl], parts
         win.box.pack_end(w, False, False, 0)
         win.box.reorder_child(w, 0)
         placed = True
@@ -1436,6 +1494,15 @@ def make(win, cid, t, opts):
         c["multi"] = bool(opts.get("multi"))
         if opts.get("choosedt"):
             cal_set(w, opts["choosedt"])
+            if c["multi"] and "-" in str(opts["choosedt"]):
+                lo, hi = str(opts["choosedt"]).split("-", 1)
+                c["range"] = [parse_stamp(lo), parse_stamp(hi)]
+        c["w"] = w
+        if c["multi"]:
+            # Multi: Shift+click extends the selection into a range, like the Win32 month calendar
+            w.connect("day-selected", lambda *_: cal_pick(c))
+            w.connect("month-changed", lambda *_: cal_mark(c))
+            cal_pick(c, initial=True)
         w.connect("day-selected", lambda *_: ev(cid, "Change", 0))
     else:
         w = Gtk.Label(label=text)
@@ -1714,6 +1781,43 @@ def handle(req):
         if isinstance(c["w"], Gtk.Button):
             c["w"].clicked()
         return True
+    if op == "sb":
+        c = ctrls[req["ctrl"]]
+        if req["do"] == "parts":
+            # SetParts(widths...): one label per part, the last one takes the remaining width
+            box = c["partbox"]
+            texts = [p.get_text() for p in c["parts"]]
+            for ch in box.get_children():
+                box.remove(ch)
+            widths = list(req.get("widths", []))
+            labels = []
+            for i in range(len(widths) + 1):
+                lbl = Gtk.Label(label=texts[i] if i < len(texts) else "", xalign=0)
+                lbl.set_margin_start(6)
+                lbl.set_margin_top(2)
+                lbl.set_margin_bottom(2)
+                lbl.set_ellipsize(Pango.EllipsizeMode.END)
+                if i < len(widths):
+                    lbl.set_size_request(int(widths[i]), -1)
+                    box.pack_start(lbl, False, False, 0)
+                    box.pack_start(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL), False, False, 0)
+                else:
+                    box.pack_start(lbl, True, True, 0)
+                labels.append(lbl)
+            c["parts"] = labels
+            c["label"] = labels[0]
+            box.show_all()
+            apply_style(c)
+            return len(labels)
+        if req["do"] == "text":
+            i = int(req.get("part", 1)) - 1
+            if not 0 <= i < len(c["parts"]):
+                return 0
+            c["parts"][i].set_text(req.get("text", ""))
+            return 1
+        if req["do"] == "get":
+            i = int(req.get("part", 1)) - 1
+            return c["parts"][i].get_text() if 0 <= i < len(c["parts"]) else ""
     if op == "dropdown":
         c = ctrls[req["ctrl"]]
         if req.get("show"):

@@ -12,9 +12,9 @@
     {"area": "Files / Dirs / INI", "measure": "builtins:files", "note": "Drive* read real mount metadata"},
     {"area": "Window functions (Win*)", "measure": "builtins:window", "note": "EWMH + X Shape (regions, TransColor)"},
     {"area": "Tray icon & menu", "percent": 98, "note": "submenus, icons; XFCE live, Cinnamon via XApp"},
-    {"area": "Hotkeys & hotstrings (X11)", "percent": 98, "note": "SendLevel rules, bare modifiers, end keys"},
+    {"area": "Hotkeys & hotstrings (X11)", "percent": 99, "note": "SendLevel rules, bare modifiers, end keys"},
     {"area": "All built-in functions", "measure": "builtins:all", "note": "{full} full, {partial} partial, {missing} missing"},
-    {"area": "Gui", "percent": 93, "note": "21 of 23 control types (not ActiveX/Custom)"},
+    {"area": "Gui", "percent": 95, "note": "21 of 23 control types (not ActiveX/Custom)"},
     {"area": "Win32 controls (Control*, Edit*)", "note": "own Gui + other apps via AT-SPI", "percent": 90},
     {"area": "COM / ActiveX", "percent": 0, "note": "Windows-only"},
     {"area": "Wayland input", "percent": 0, "note": "dropped for now"}

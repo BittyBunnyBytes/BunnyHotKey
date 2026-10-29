@@ -12,6 +12,7 @@ EXPECT = {
     "x11_hotkey.ahk": "hotkey fired: F24",
     "x11_sendlevel.ahk": "F23 | F24 F22 | F21",
     "x11_bare_modifier.ahk": "RCtrl F24",
+    "x11_bare_modifier_hotif.ahk": "RCtrl F24 | ^F24",
     "x11_hotstring_endchar.ahk": "button saw: by the way",
 }
 

@@ -141,6 +141,7 @@ class X11Backend:
         want_buttons: dict[tuple, bool] = {}
         codes = set()
         block: set[int] = set()
+        cond_mods = False
         if hk_engine is not None:
             for hk in tuple(hk_engine.hotkeys):
                 sp = hk.spec
@@ -153,7 +154,14 @@ class X11Backend:
                 if bare_mod:
                     # LWin:: etc.: grab under any modifier state; unconditional ones also leave the modifier map
                     masks = [xlib.AnyModifier]
-                    if not sp.up and all(v.criterion is None for v in hk.variants if v.enabled):
+                    conditional = any(v.criterion is not None for v in hk.variants if v.enabled)
+                    cond_mods = True if conditional else cond_mods
+                    # #HotIf variants: out of the modifier map only while a variant applies to the active window
+                    # (re-checked whenever the active window changes)
+                    active = not conditional or any(
+                        v.criterion is None or hk_engine.rt.eval_criterion(v.criterion)
+                        for v in hk.variants if v.enabled)
+                    if not sp.up and active:
                         if sp.key.neutral:
                             block |= {K.MOD_LEFT[sp.key.neutral] + 8, K.MOD_RIGHT[sp.key.neutral] + 8}
                         else:
@@ -227,6 +235,7 @@ class X11Backend:
                 x.XUngrabKey(d.dpy, key[0], key[1], d.root)
                 del self.grabbed_keys[key]
         self.end_codes = end_codes
+        self.cond_mods = cond_mods
         codes |= end_codes
         self.grabbed_codes = codes
         d.flush()
@@ -242,6 +251,9 @@ class X11Backend:
         x = d.x
         fd = x.XConnectionNumber(d.dpy)
         ev = xlib.XEvent()
+        x.XSelectInput(d.dpy, d.root, xlib.PropertyChangeMask)     # _NET_ACTIVE_WINDOW changes
+        active_atom = d.atom("_NET_ACTIVE_WINDOW")
+        self.cond_mods = False
         self._apply_grabs()
         while self.running:
             if self.need_refresh.is_set():
@@ -259,6 +271,9 @@ class X11Backend:
                     self._on_grabbed_key(ev.xkey, t == xlib.KeyPress)
                 elif t == xlib.ButtonPress or t == xlib.ButtonRelease:
                     self._on_grabbed_button(ev.xbutton, t == xlib.ButtonPress)
+                elif t == xlib.PropertyNotify:
+                    if ev.xproperty.atom == active_atom and self.cond_mods and not self.mod_released:
+                        self._apply_grabs()          # #HotIf bare-modifier hotkeys follow the active window
                 elif t == xlib.GenericEvent and ev.xcookie.extension == self.xi_opcode:
                     if x.XGetEventData(d.dpy, byref(ev.xcookie)):
                         try:

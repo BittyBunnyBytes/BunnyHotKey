@@ -1031,39 +1031,20 @@ def _tv_gettext(this, item):
     return v
 
 
-# StatusBar parts: kept script-side and joined with tabs in one label (GTK has no multi-part status bar)
-_SB_PARTS: dict[int, list] = {}
-
-
-def _sb_parts(this):
-    if this.cid not in _SB_PARTS:
-        _SB_PARTS[this.cid] = [ctrl_get(this, "Text")]
-    return _SB_PARTS[this.cid]
-
-
+# StatusBar parts: one label per part on the GTK side (SetParts widths, SetText(text, part))
 def _sb_settext(this, text, part=1):
-    parts = _sb_parts(this)
     i = rt().to_int(part) if part not in (UNSET, "") else 1
-    if not 1 <= i <= max(len(parts), 1):
-        return 0
-    parts[i - 1] = S(text)
-    _srv().call("set", ctrl=this.cid, prop="Text", value="    ".join(parts) if len(parts) > 1 else parts[0])
-    return 1
+    return _srv().call("sb", ctrl=this.cid, do="text", part=i, text=S(text))
 
 
 def _sb_setparts(this, widths):
-    n = min(len(widths) + 1, 256)
-    parts = _sb_parts(this)
-    parts[:] = (parts + [""] * n)[:n]
-    _srv().call("set", ctrl=this.cid, prop="Text", value="    ".join(parts))
+    ws = [rt().to_int(w) for w in widths][:255]
+    _srv().call("sb", ctrl=this.cid, do="parts", widths=ws)
     return this.cid
 
 
 def sb_text(c, part=1):
-    parts = _SB_PARTS.get(c.cid)
-    if parts:
-        return parts[part - 1] if 1 <= part <= len(parts) else ""
-    return ctrl_get(c, "Text") if part == 1 else ""
+    return _srv().call("sb", ctrl=c.cid, do="get", part=part)
 
 
 def classnn(c):

@@ -69,8 +69,13 @@ class XGenericEventCookie(ctypes.Structure):
                 ("extension", c_int), ("evtype", c_int), ("cookie", c_uint), ("data", c_void_p)]
 
 
+class XPropertyEvent(ctypes.Structure):
+    _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int), ("display", c_void_p),
+                ("window", c_ulong), ("atom", c_ulong), ("time", c_ulong), ("state", c_int)]
+
+
 class XEvent(ctypes.Union):
-    _fields_ = [("type", c_int), ("xkey", XKeyEvent), ("xbutton", XButtonEvent),
+    _fields_ = [("type", c_int), ("xkey", XKeyEvent), ("xbutton", XButtonEvent), ("xproperty", XPropertyEvent),
                 ("xselectionrequest", XSelectionRequestEvent), ("xselection", XSelectionEvent),
                 ("xclient", XClientMessageEvent), ("xcookie", XGenericEventCookie), ("pad", c_long * 24)]
 
