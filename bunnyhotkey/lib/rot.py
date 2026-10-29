@@ -18,10 +18,13 @@ import threading
 
 from .. import objects as O
 from ..objects import AhkObject, throw
+from ..values import to_bool
 from .com import ComDispatch, Impl, com_error
 
 _lock = threading.RLock()
 _exports: dict[int, object] = {}            # id -> object exported to other processes
+_export_refs: dict[int, int] = {}           # id -> proxies other processes hold (each sends "release" once)
+_pinned: set[int] = set()                   # ids published in the table (kept until revoked)
 _export_ids: dict[int, int] = {}            # id(object) -> export id
 _ids = itertools.count(1)
 _cookies: dict[int, str] = {}               # RegisterActiveObject cookie -> table key
@@ -69,15 +72,16 @@ def _alive(pid):
 # ---------------------------------------------------------------- registering
 def register(obj, name) -> int:
     """RegisterActiveObject: publish obj under a CLSID; returns the cookie for RevokeActiveObject."""
+    from . import ipc
+    ipc.start_server()                      # before the entry exists, so a client never finds a dead socket
     key = key_of(name)
-    eid = export(obj)
+    eid = export(obj, count=False)
     path = os.path.join(table_dir(), _fname(key))
     with open(path + ".tmp", "w") as f:
         json.dump({"pid": os.getpid(), "id": eid, "key": key}, f)
     os.replace(path + ".tmp", path)
-    from . import ipc
-    ipc.start_server()
     with _lock:
+        _pinned.add(eid)
         _local[key] = obj
         cookie = next(_cookie_ids)
         _cookies[cookie] = key
@@ -89,7 +93,11 @@ def revoke(cookie) -> bool:
         key = _cookies.pop(cookie, None)
         if key is None:
             return False
-        _local.pop(key, None)
+        obj = _local.pop(key, None)
+        eid = _export_ids.get(id(obj)) if obj is not None else None
+        if eid is not None:
+            _pinned.discard(eid)
+            _drop_if_unused(eid)
     _remove_entry(key)
     return True
 
@@ -135,18 +143,38 @@ def get_active(name):
             except OSError:
                 pass
         com_error(0x800401E3, "Operation unavailable", str(name))
-    return ComDispatch(RemoteImpl(int(ent["pid"]), int(ent["id"])))
+    return ComDispatch(RemoteImpl(int(ent["pid"]), int(ent["id"]), counted=False))
 
 
 # ---------------------------------------------------------------- marshalling
-def export(obj) -> int:
+def export(obj, count=True) -> int:
+    """Make obj reachable from other processes.  count: one more remote proxy will hold it."""
     with _lock:
         eid = _export_ids.get(id(obj))
         if eid is None or _exports.get(eid) is not obj:
             eid = next(_ids)
             _exports[eid] = obj
             _export_ids[id(obj)] = eid
+            _export_refs[eid] = 0
+        if count:
+            _export_refs[eid] += 1
         return eid
+
+
+def _release_export(eid):
+    with _lock:
+        if eid in _export_refs:
+            _export_refs[eid] = max(_export_refs[eid] - 1, 0)
+        _drop_if_unused(eid)
+
+
+def _drop_if_unused(eid):
+    with _lock:
+        if _export_refs.get(eid, 0) == 0 and eid not in _pinned:
+            obj = _exports.pop(eid, None)
+            _export_refs.pop(eid, None)
+            if obj is not None and _export_ids.get(id(obj)) == eid:
+                del _export_ids[id(obj)]
 
 
 def marshal(v):
@@ -174,8 +202,21 @@ class RemoteImpl(Impl):
     iface = "IDispatch"
     default = "\0value"
 
-    def __init__(self, pid, eid):
+    def __init__(self, pid, eid, counted=True):
         self.pid, self.eid = pid, eid
+        self.counted = counted      # False for ComObjActive's proxy of a published object (not counted)
+
+    def __del__(self):
+        if not self.counted:
+            return
+        pid, eid = self.pid, self.eid
+
+        def send():
+            try:
+                _notify_release(pid, eid)
+            except Exception:
+                pass
+        threading.Thread(target=send, daemon=True).start()
 
     def _req(self, op, name=None, args=(), value=None):
         return request(self.pid, {"op": op, "id": self.eid, "name": name,
@@ -238,6 +279,22 @@ def request(pid, body, timeout=10.0):
     return unmarshal(reply.get("result", ""))
 
 
+def _notify_release(pid, eid):
+    """Tell the owner one proxy is gone (fire and forget)."""
+    from .ipc import sock_path
+    path = sock_path(pid)
+    if not os.path.exists(path):
+        return
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(2.0)
+    try:
+        s.connect(path)
+        s.sendall((json.dumps({"com": {"op": "release", "id": eid}}) + "\n").encode())
+        s.recv(1024)
+    finally:
+        s.close()
+
+
 def serve(body):
     """Run in the owning script: perform a member call another process asked for."""
     from .com import wrap
@@ -249,17 +306,15 @@ def serve(body):
     args = [unmarshal(a) for a in body.get("args") or []]
     try:
         if op == "release":
-            with _lock:
-                _exports.pop(int(body["id"]), None)
+            _release_export(int(body["id"]))
             return {"result": ""}
         if op == "enum":
-            from ..objects import VarRef
-            from ..values import Cell
+            from ..objects import Cell, VarRef
             e = r.call_method(obj, "__Enum", [1])
             out = []
             while True:
-                cell = Cell("")
-                if not r.to_bool(r.call(e, [VarRef(cell)])):
+                cell = Cell("", "")
+                if not to_bool(r.call(e, [VarRef(cell)])):
                     break
                 out.append(marshal(cell.value))
             return {"result": out}

@@ -412,6 +412,52 @@ def error_construct(cls, args):
     return construct(CLASSES[cls], list(args))
 
 
+# __Delete: AutoHotkey calls it when an object's last reference goes away.  Python's reference counting frees
+# objects at the same moment, so instances whose class defines __Delete get a type with a __del__ that runs it
+# (in the script thread; from elsewhere it is queued).
+_DELETABLE: dict[type, type] = {}
+
+
+def _run_delete(self):
+    from ..errors import AhkThrow
+    import threading
+    p, _ = self.find("__Delete")
+    if p is None or p.call is None:
+        return
+    r = rt()
+    if r is None:
+        return
+
+    def run():
+        try:
+            r.call(p.call, [self])
+        except AhkThrow as e:
+            r.unhandled(e.value)
+        except Exception:
+            pass
+    if threading.current_thread() is getattr(r, "main_thread", None):
+        run()
+    else:
+        r.post(run)
+
+
+def _arm_delete(obj):
+    p, _ = obj.find("__Delete")
+    if p is None or p.call is None:
+        return
+    t = type(obj)
+    if t in _DELETABLE.values():
+        return
+    sub = _DELETABLE.get(t)
+    if sub is None:
+        sub = type(t.__name__, (t,), {"__slots__": (), "__del__": _run_delete})
+        _DELETABLE[t] = sub
+    try:
+        obj.__class__ = sub
+    except TypeError:
+        pass
+
+
 def construct(cls, args):
     r = rt()
     proto_p = cls.own("Prototype")
@@ -424,6 +470,7 @@ def construct(cls, args):
     else:
         factory = lambda p: AhkObject(p)
     obj = factory(proto)
+    _arm_delete(obj)
     r.call_method(obj, "__Init", [])
     p, _ = obj.find("__New")
     if p is not None and p.call is not None:
@@ -434,9 +481,9 @@ def construct(cls, args):
 def obj_clone(this):
     if not isinstance(this, AhkObject):
         throw("TypeError", type_error_msg("Object", this))
-    if type(this) is AhkArray:
+    if isinstance(this, AhkArray):
         return arr_clone(this)
-    if type(this) is AhkMap:
+    if isinstance(this, AhkMap):
         return map_clone(this)
     o = type(this).__new__(type(this))
     AhkObject.__init__(o, this.base)
@@ -632,6 +679,7 @@ def arr_clone(this):
     a = AhkArray(this.base, this.items)
     for k, p in this.props.items():
         a.props[k] = Prop(p.name, p.value, p.get, p.set, p.call, p.is_value)
+    _arm_delete(a)
     return a
 
 
@@ -681,6 +729,7 @@ def map_clone(this):
     m.data = dict(this.data)
     for k, p in this.props.items():
         m.props[k] = Prop(p.name, p.value, p.get, p.set, p.call, p.is_value)
+    _arm_delete(m)
     return m
 
 

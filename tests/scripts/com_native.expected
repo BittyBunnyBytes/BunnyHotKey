@@ -1,0 +1,13 @@
+1
+tic 0
+type 9
+addref 3
+release 2
+same 1 1
+objfromptr 1
+fw 1
+unk 13 1
+err (0x80004002) No such interface supported
+x 42
+dispid 1
+vt 3 val 42

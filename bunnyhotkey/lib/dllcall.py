@@ -765,8 +765,9 @@ def _get_window_long(pairs):
         if c is not None:
             return _int32(ControlGetExStyle(c))
         return 0x8 if d.atom("_NET_WM_STATE_ABOVE") in d.get_longs(w, "_NET_WM_STATE") else 0
-    if idx == GWL_ID:
-        return c.cid if c is not None else 0
+    if idx == GWL_ID:                                               # GetDlgCtrlID, as WM_COMMAND reports it
+        from .notify import ctrl_id
+        return ctrl_id(c) if c is not None else 0
     if idx == GWLP_HWNDPARENT:
         return w if c is not None else _owner(d, w)
     return 0

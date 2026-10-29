@@ -170,7 +170,7 @@ class CtrlObj(AhkObject):
     __slots__ = ("cid", "gui", "ctype", "name", "events", "x", "y", "w", "h", "rows", "altsubmit", "group",
                  "enabled", "visible", "tab", "buddy", "multi", "readonly", "password", "sized", "font",
                  "dtformat", "imagelist", "color", "bg", "header", "exstyle", "_com", "custom",
-                 "command_cbs", "notify_cbs")
+                 "command_cbs", "notify_cbs", "vertical")
 
     def __init__(self, gui, ctype):
         super().__init__(CLASSES["Gui." + CLASS_OF.get(ctype, "Text")].prototype)
@@ -201,6 +201,7 @@ class CtrlObj(AhkObject):
         self.custom = ""            # the Win32 class of a Custom control ("sysipaddress32"), else ""
         self.command_cbs = {}       # OnCommand: notification code -> callbacks
         self.notify_cbs = {}        # OnNotify
+        self.vertical = False
 
 
 def _srv():
@@ -451,6 +452,7 @@ def gui_add(this, ctype, options="", text=UNSET):
     passthru = {k: v for k, v in flags.items() if k not in ("name", "altsubmit", "section")}
     send.update(text=txt, items=items, **passthru)
     ctrl.altsubmit = bool(flags.get("altsubmit"))
+    ctrl.vertical = bool(flags.get("vertical"))
     ctrl.readonly = bool(flags.get("readonly"))
     ctrl.password = bool(flags.get("password"))
     ctrl.multi = bool(flags.get("multi") or flags.get("8")) and t == "ListBox"

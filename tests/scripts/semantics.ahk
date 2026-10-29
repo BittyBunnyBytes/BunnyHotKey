@@ -133,3 +133,17 @@ out(Trim("  pad  ") "|")
 out(Format("{1}-{1}-{2:U}", "x", "y"))
 out(Format("{:+d} {:.3e} {:08.3f}", 5, 12345.678, -3.5))
 out(Chr(65) Ord("a"))
+; __Delete runs when the last reference goes away
+class DelTest {
+    __New(n) => this.n := n
+    __Delete() => FileAppend("delete " this.n "`n", "*")
+}
+dt := DelTest(1)
+dt := ""
+FileAppend("after 1`n", "*")
+dt2 := DelTest(2), keep := dt2
+dt2 := ""
+FileAppend("still kept`n", "*")
+keep := ""
+dt3 := DelTest(3).Clone()
+dt3 := ""

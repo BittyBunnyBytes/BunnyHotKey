@@ -60,7 +60,8 @@ class Endpoint:
 
     def channels(self):
         vols = self.info().get("volume", {})
-        return [int(str(v.get("value_percent", "0")).rstrip("%") or 0) / 100 for v in vols.values()] or [0.0]
+        # Windows scalars stay within 0..1, even when Pulse has a channel boosted past 100%
+        return [min(1.0, int(str(v.get("value_percent", "0")).rstrip("%") or 0) / 100) for v in vols.values()] or [0.0]
 
     def set_channels(self, scalars):
         args = [f"{max(0, round(s * 100))}%" for s in scalars]
@@ -119,6 +120,7 @@ class Meter:
         p, self.proc = self.proc, None
         if p is not None:
             p.kill()
+            p.wait()
 
 
 # ---------------------------------------------------------------- interfaces
@@ -161,7 +163,7 @@ class EndpointVolume(_AudioObject):
             (c_hr, [p], self.register_notify),                     # 3 RegisterControlChangeNotify
             (c_hr, [p], self.unregister_notify),                   # 4 UnregisterControlChangeNotify
             (c_hr, [p], lambda o: _u(o, len(ep.channels()))),      # 5 GetChannelCount
-            (c_hr, [f, p], lambda db, g: ep.set_master(db_to_scalar(db))),            # 6 SetMasterVolumeLevel
+            (c_hr, [f, p], self.set_master_db),                    # 6 SetMasterVolumeLevel
             (c_hr, [f, p], self.set_master_scalar),                # 7 SetMasterVolumeLevelScalar
             (c_hr, [p], lambda o: _f(o, scalar_to_db(ep.master()))),                  # 8 GetMasterVolumeLevel
             (c_hr, [p], lambda o: _f(o, ep.master())),             # 9 GetMasterVolumeLevelScalar
@@ -177,6 +179,12 @@ class EndpointVolume(_AudioObject):
             (c_hr, [p], lambda o: _u(o, ENDPOINT_HARDWARE_SUPPORT_VOLUME | ENDPOINT_HARDWARE_SUPPORT_MUTE)),  # 19
             (c_hr, [p, p, p], self.volume_range),                  # 20 GetVolumeRange
         ], (IID_IAudioEndpointVolume,), ep)
+
+    def set_master_db(self, db, g):
+        if not MIN_DB <= db <= MAX_DB:
+            return E_INVALIDARG
+        self.ep.set_master(db_to_scalar(db))
+        return S_OK
 
     def set_master_scalar(self, s, g):
         if not 0.0 <= s <= 1.0:

@@ -19,7 +19,7 @@ import weakref
 from .. import objects as O
 from .com import ComDispatch, Impl, com_error
 from ..objects import AhkObject, throw
-from ..values import UNSET
+from ..values import UNSET, to_bool
 
 c_hr = ctypes.c_int32
 P = ctypes.c_void_p
@@ -169,13 +169,17 @@ class NativeObject:
         return E_NOINTERFACE
 
     def _addref(self):
-        self.refs += 1
-        return self.refs
+        with _lock:
+            self.refs += 1
+            return self.refs
 
     def _release(self):
-        self.refs -= 1
-        if self.refs <= 0:
-            self.refs = 0
+        with _lock:
+            self.refs -= 1
+            last = self.refs <= 0
+            if last:
+                self.refs = 0
+        if last:
             self.on_last_release()
         return self.refs
 
@@ -255,7 +259,7 @@ def variant_write(addr, v):
         if vt == VT_BSTR and isinstance(v.val, str):
             wr("<Q", addr + 8, sys_alloc_string(v.val))
         elif vt == VT_BOOL:
-            wr("<h", addr + 8, -1 if O.RT.to_bool(v.val) else 0)
+            wr("<h", addr + 8, -1 if to_bool(v.val) else 0)
         elif vt in (VT_R4,):
             wr("<f", addr + 8, float(O.RT.to_num(v.val)))
         elif vt in (VT_R8, VT_DATE):
@@ -366,20 +370,32 @@ class DispatchObject(NativeObject):
         elif flags & (DISPATCH_PROPERTYPUT | DISPATCH_PROPERTYPUTREF):
             self.target.set(name, args, named.get(DISPID_PROPERTYPUT, ""))
             r = None
+        elif flags & DISPATCH_METHOD and flags & DISPATCH_PROPERTYGET:
+            # what most clients send for obj.x: a value property is read, anything else is called
+            r = getattr(self.target, "get_or_call", self.target.call)(name, args)
         elif flags & DISPATCH_METHOD:
             r = self.target.call(name, args)
         else:
             r = self.target.get(name, args)
         if result:
             variant_write(result, r if r is not None else "")
+            if isinstance(r, EnumVariant):
+                wr("<H", result, VT_UNKNOWN)            # _NewEnum returns an IUnknown (IEnumVARIANT)
         return S_OK
 
 
 class _ImplTarget:
-    """A com.Impl seen through IDispatch."""
+    """A com.Impl seen through IDispatch.  Holds the ComObject weakly (see _Holding)."""
 
-    def __init__(self, impl):
-        self.impl = impl
+    def __init__(self, disp):
+        self._disp = weakref.ref(disp)
+
+    @property
+    def impl(self):
+        d = self._disp()
+        if d is None:
+            raise ComFailure(0x80010108)        # RPC_E_DISCONNECTED: the object is gone
+        return d.impl
 
     def _wrap(self, v):
         from .com import wrap
@@ -396,6 +412,9 @@ class _ImplTarget:
     def call(self, name, args):
         return self._wrap(self.impl.call(name or self.impl.default or "Item", args))
 
+    def get_or_call(self, name, args):
+        return self.get(name, args)             # Impl.get already falls back to methods
+
     def enum_object(self):
         from .com import _enumerator
         return EnumVariant(_enumerator(self.impl.enum(), 1))
@@ -405,7 +424,24 @@ class _ScriptTarget:
     """A script object seen through IDispatch, as AutoHotkey exposes its objects to COM."""
 
     def __init__(self, obj):
-        self.obj = obj
+        self._obj = weakref.ref(obj)
+
+    @property
+    def obj(self):
+        o = self._obj()
+        if o is None:
+            raise ComFailure(0x80010108)
+        return o
+
+    def get_or_call(self, name, args):
+        r = O.RT
+        if name is None:
+            return self.get(None, args) if args else self.call(None, args)
+        try:
+            has_method = to_bool(r.call_method(self.obj, "HasMethod", [name]))
+        except Exception:
+            has_method = False
+        return self.call(name, args) if has_method else self.get(name, args)
 
     def get(self, name, args):
         r = O.RT
@@ -450,11 +486,10 @@ class EnumVariantObject(NativeObject):
         ], (IID_IEnumVARIANT,), ev)
 
     def _one(self):
-        from ..objects import VarRef
-        from ..values import Cell
-        cell = Cell("")
+        from ..objects import Cell, VarRef
+        cell = Cell("", "")
         ref = VarRef(cell)
-        if not O.RT.to_bool(O.RT.call(self.ev.enumerator, [ref])):
+        if not to_bool(O.RT.call(self.ev.enumerator, [ref])):
             raise StopIteration
         return cell.value
 
@@ -524,22 +559,24 @@ class _Holding:
     object's lifetime stays the script's."""
 
     def _addref(self):
-        self.refs += 1
-        self.keep = self._obj()
-        return self.refs + 1
+        with _lock:
+            self.refs += 1
+            self.keep = self._obj()
+            return self.refs + 1
 
     def _release(self):
-        self.refs = max(self.refs - 1, 0)
-        if self.refs == 0:
-            self.keep = None
-        return self.refs + 1
+        with _lock:
+            self.refs = max(self.refs - 1, 0)
+            if self.refs == 0:
+                self.keep = None
+            return self.refs + 1
 
 
 class _ImplObject(_Holding, DispatchObject):
     def __init__(self, disp):
         self._obj = weakref.ref(disp)
         iids = {guid_bytes(i) for i in getattr(disp.impl, "iids", ())}
-        DispatchObject.__init__(self, _ImplTarget(disp.impl), iids)
+        DispatchObject.__init__(self, _ImplTarget(disp), iids)
 
     def query(self, iid):
         q = getattr(self._obj().impl, "query_native", None) if self._obj() is not None else None
@@ -623,8 +660,20 @@ class ForeignImpl(Impl):
         for i in range(n):
             variant_clear(base + VARIANT_SIZE * i)
         if hr < 0:
-            com_error(hr, "Exception occurred." if hr & 0xFFFFFFFF == DISP_E_EXCEPTION else "Call failed.",
-                      name or "")
+            msg, src = "Call failed.", name or ""
+            if hr & 0xFFFFFFFF == DISP_E_EXCEPTION:
+                # EXCEPINFO: wCode, bstrSource @8, bstrDescription @16, bstrHelpFile @24, scode @56
+                e = ctypes.addressof(excep)
+                bsrc, bdesc, bhelp = rd("<Q", e + 8), rd("<Q", e + 16), rd("<Q", e + 24)
+                desc, source = bstr_at(bdesc), bstr_at(bsrc)
+                for b in (bsrc, bdesc, bhelp):
+                    sys_free_string(b)
+                scode = rd("<i", e + 56)
+                if scode:
+                    hr = scode
+                msg = desc or "Exception occurred."
+                src = source or src
+            com_error(hr, msg, src)
         v = variant_read(ctypes.addressof(res))
         variant_clear(ctypes.addressof(res))
         return v
@@ -653,7 +702,11 @@ class ForeignImpl(Impl):
             ctypes.addressof(dpb), ctypes.addressof(res), 0, 0)
         if hr < 0:
             com_error(hr, "Member not found.", "_NewEnum")
-        punk = rd("<Q", ctypes.addressof(res) + 8)
+        vt = rd("<H", ctypes.addressof(res))
+        punk = rd("<Q", ctypes.addressof(res) + 8) if vt in (VT_UNKNOWN, VT_DISPATCH) else 0
+        if not punk:
+            variant_clear(ctypes.addressof(res))
+            com_error(0x80020003, "Member not found.", "_NewEnum")
         hr, penum = query_interface(punk, IID_IEnumVARIANT)
         release(punk)
         if hr & 0x80000000:
@@ -683,6 +736,10 @@ def _text_arg(v):
     if isinstance(v, str) and not v.lstrip("-").isdigit():
         return v
     return wstr_at(_addr(v))
+
+
+def _is_null(v):
+    return not isinstance(v, (str, AhkObject)) and O.RT.to_int(v) == 0 if v not in ("", UNSET) else True
 
 
 def _out_ptr(target, value, fmt="<Q"):
@@ -775,8 +832,9 @@ def install_dll_api():
     """oleaut32/ole32 functions scripts call around COM, added to DllCall's emulation table."""
     from .dllcall import EMU
     EMU.update({
-        "sysallocstring": lambda p: sys_alloc_string(_text_arg(p[0][1])),
-        "sysallocstringlen": lambda p: sys_alloc_string(_text_arg(p[0][1])[:O.RT.to_int(p[1][1])]),
+        "sysallocstring": lambda p: 0 if _is_null(p[0][1]) else sys_alloc_string(_text_arg(p[0][1])),
+        "sysallocstringlen": lambda p: sys_alloc_string("\0" * O.RT.to_int(p[1][1])) if _is_null(p[0][1])
+        else sys_alloc_string(_text_arg(p[0][1])[:O.RT.to_int(p[1][1])].ljust(O.RT.to_int(p[1][1]), "\0")),
         "sysfreestring": lambda p: sys_free_string(_addr(p[0][1])) or 0,
         "sysstringlen": lambda p: rd("<I", _addr(p[0][1]) - 4) // 2 if _addr(p[0][1]) else 0,
         "sysstringbytelen": lambda p: rd("<I", _addr(p[0][1]) - 4) if _addr(p[0][1]) else 0,

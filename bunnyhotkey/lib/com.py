@@ -62,7 +62,18 @@ class Impl:
     progid = ""
     iface = "IDispatch"
     default = None          # default member name (obj[x], obj(x))
-    owner = None
+    _owner = None
+
+    @property
+    def owner(self):
+        """The ComObject wrapping this implementation.  Held weakly, so the ComObject is freed (and a wrapped
+        interface released) as soon as the script drops it, as COM's reference counting does."""
+        return self._owner() if self._owner is not None else None
+
+    @owner.setter
+    def owner(self, disp):
+        import weakref
+        self._owner = weakref.ref(disp) if disp is not None else None
 
     def _find(self, prefix, name):
         attr = prefix + name.lower()

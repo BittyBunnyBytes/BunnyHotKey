@@ -55,6 +55,11 @@ NOTIFY = {
 }
 
 
+def _hwnd(c):
+    """The Gui window's handle as the script sees it (Gui.Hwnd)."""
+    return getattr(c.gui, "xid", 0) or c.gui.wid
+
+
 def ctrl_id(c):
     """The control's ID (GetDlgCtrlID): AutoHotkey numbers a Gui's controls from 3 in creation order."""
     try:
@@ -72,11 +77,14 @@ def _nmhdr(c, code, ev, args):
     if c.ctype == "ListView":
         # NMLISTVIEW / NMITEMACTIVATE: iItem (0-based), iSubItem, uNewState, uOldState, uChanged
         if code == LVN_ITEMCHANGED:
-            selected = 2 if ev == "ItemSelect" and len(args) > 1 and args[1] else 0
-            focused = 1 if ev == "ItemFocus" else 0
-            checked = (0x2000 if len(args) > 1 and args[1] else 0x1000) if ev == "ItemCheck" else 0
-            struct.pack_into("<iiIII", b.data, 24, row - 1, 0, selected | focused | checked, 0,
-                             8)                                                  # LVIF_STATE
+            on = bool(len(args) > 1 and args[1])
+            if ev == "ItemSelect":
+                new, old = (2, 0) if on else (0, 2)                     # LVIS_SELECTED
+            elif ev == "ItemFocus":
+                new, old = 1, 0                                         # LVIS_FOCUSED
+            else:                                                       # state image 2 = checked, 1 = unchecked
+                new, old = (0x2000, 0x1000) if on else (0x1000, 0x2000)
+            struct.pack_into("<iiIII", b.data, 24, row - 1, 0, new, old, 8)    # uChanged = LVIF_STATE
         elif code == LVN_COLUMNCLICK:
             struct.pack_into("<ii", b.data, 24, -1, row - 1)
         else:
@@ -99,7 +107,7 @@ def deliver(c, ev, args):
     if code is not None:
         wp = (code & 0xFFFF) << 16 | ctrl_id(c)
         for fn in message_handlers(WM_COMMAND):
-            res = r.call(fn, [wp, c.cid, WM_COMMAND, c.gui.wid])
+            res = r.call(fn, [wp, c.cid, WM_COMMAND, _hwnd(c)])
             if res != "" and res is not None:
                 return True
         for cb in list(c.command_cbs.get(code, [])):
@@ -109,7 +117,7 @@ def deliver(c, ev, args):
     if code is not None:
         nm = _nmhdr(c, code, ev, args)
         for fn in message_handlers(WM_NOTIFY):
-            res = r.call(fn, [ctrl_id(c), nm.addr, WM_NOTIFY, c.gui.wid])
+            res = r.call(fn, [ctrl_id(c), nm.addr, WM_NOTIFY, _hwnd(c)])
             if res != "" and res is not None:
                 return True
         for cb in list(c.notify_cbs.get(code, [])):
@@ -119,13 +127,13 @@ def deliver(c, ev, args):
         return False
     if c.ctype == "Slider" and ev == "Change":
         # trackbars report through WM_HSCROLL/WM_VSCROLL to the parent: TB_THUMBPOSITION with the position
-        msg = WM_VSCROLL if getattr(c, "vertical", False) else WM_HSCROLL
+        msg = WM_VSCROLL if c.vertical else WM_HSCROLL
         try:
             pos = int(r.to_int(args[0])) if args and args[0] not in ("", 0) else 0
         except Exception:
             pos = 0
         for fn in message_handlers(msg):
-            res = r.call(fn, [4 | (pos & 0xFFFF) << 16, c.cid, msg, c.gui.wid])
+            res = r.call(fn, [4 | (pos & 0xFFFF) << 16, c.cid, msg, _hwnd(c)])
             if res != "" and res is not None:
                 return True
     return False
