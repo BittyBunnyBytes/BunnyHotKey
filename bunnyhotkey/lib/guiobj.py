@@ -20,7 +20,7 @@ TYPE_ALIASES = {"text": "Text", "edit": "Edit", "button": "Button", "checkbox": 
                 "picture": "Picture", "pic": "Picture", "link": "Link", "statusbar": "StatusBar", "tab": "Tab",
                 "tab2": "Tab", "tab3": "Tab", "updown": "UpDown", "hotkey": "Hotkey", "datetime": "DateTime",
                 "monthcal": "MonthCal", "treeview": "TreeView", "activex": "ActiveX", "custom": "Custom"}
-CLASS_OF = {"Picture": "Pic", "Text": "Text", "Edit": "Edit", "Button": "Button", "CheckBox": "CheckBox",
+CLASS_OF = {"ActiveX": "ActiveX", "Picture": "Pic", "Text": "Text", "Edit": "Edit", "Button": "Button", "CheckBox": "CheckBox",
             "Radio": "Radio", "DDL": "DDL", "ComboBox": "ComboBox", "ListBox": "ListBox", "ListView": "ListView",
             "Slider": "Slider", "Progress": "Progress", "GroupBox": "GroupBox", "Link": "Link",
             "StatusBar": "StatusBar", "Tab": "Tab", "UpDown": "UpDown", "Hotkey": "Hotkey", "DateTime": "DateTime",
@@ -31,7 +31,8 @@ WIN32_CLASS = {"Text": "Static", "Picture": "Static", "Edit": "Edit", "Button": 
                "ListBox": "ListBox", "ListView": "SysListView32", "Slider": "msctls_trackbar32",
                "Progress": "msctls_progress32", "Link": "SysLink", "StatusBar": "msctls_statusbar32",
                "Tab": "SysTabControl32", "UpDown": "msctls_updown32", "Hotkey": "msctls_hotkey32",
-               "DateTime": "SysDateTimePick32", "MonthCal": "SysMonthCal32", "TreeView": "SysTreeView32"}
+               "DateTime": "SysDateTimePick32", "MonthCal": "SysMonthCal32", "TreeView": "SysTreeView32",
+               "ActiveX": "AtlAxWin"}
 # the 16 HTML colour names AutoHotkey accepts (script_gui.cpp ColorNameToBGR)
 COLOR_NAMES = {"black": "000000", "silver": "C0C0C0", "gray": "808080", "white": "FFFFFF", "maroon": "800000",
                "red": "FF0000", "purple": "800080", "fuchsia": "FF00FF", "green": "008000", "lime": "00FF00",
@@ -168,7 +169,7 @@ class GuiObj(AhkObject):
 class CtrlObj(AhkObject):
     __slots__ = ("cid", "gui", "ctype", "name", "events", "x", "y", "w", "h", "rows", "altsubmit", "group",
                  "enabled", "visible", "tab", "buddy", "multi", "readonly", "password", "sized", "font",
-                 "dtformat", "imagelist", "color", "bg", "header", "exstyle")
+                 "dtformat", "imagelist", "color", "bg", "header", "exstyle", "_com")
 
     def __init__(self, gui, ctype):
         super().__init__(CLASSES["Gui." + CLASS_OF.get(ctype, "Text")].prototype)
@@ -195,6 +196,7 @@ class CtrlObj(AhkObject):
         self.bg = ""
         self.header = TAB_HEADER
         self.exstyle = None
+        self._com = None
 
 
 def _srv():
@@ -408,9 +410,13 @@ def gui_add(this, ctype, options="", text=UNSET):
     t = TYPE_ALIASES.get(S(ctype).lower())
     if t is None:
         throw("ValueError", "Invalid control type.", S(ctype))
-    if t in ("ActiveX", "Custom"):
-        throw("Error", f"{t} controls host Win32/COM components, which don't exist on Linux "
+    if t == "Custom":
+        throw("Error", "Custom controls host Win32 window classes, which don't exist on Linux "
                        "(not supported by Bunny Hot Key).", S(ctype))
+    if t == "ActiveX" and not re.match(r"\s*(shell\.explorer|mshtml:|about:|https?:|file:)", S(text) if text is not UNSET
+                                       else "", re.I):
+        throw("Error", "Only the web browser ActiveX control (Shell.Explorer, mshtml:, a URL) is available on Linux.",
+              S(text) if text is not UNSET else "")
     _live(this)
     opts = S(options)
     # the first control on a tab page goes inside the tab's display area (script_gui.cpp GuiType::AddControl)
@@ -954,7 +960,7 @@ def setup():
     prop(gp, "__Item", get=lambda this, name: _gui_item(this, name))
 
     cp = CLASSES["Gui.Control"].prototype
-    prop(cp, "Value", get=lambda this: _num(ctrl_get(this, "Value")), set=lambda this, v: ctrl_set(this, "Value", v))
+    prop(cp, "Value", get=lambda this: _ctrl_value(this), set=lambda this, v: ctrl_set(this, "Value", v))
     prop(cp, "Text", get=lambda this: ctrl_get(this, "Text"), set=lambda this, v: ctrl_set(this, "Text", S(v)))
     prop(cp, "Enabled", get=lambda this: int(this.enabled), set=lambda this, v: ctrl_set_enabled(this, v))
     prop(cp, "Visible", get=lambda this: int(this.visible), set=lambda this, v: ctrl_set_visible(this, v))
@@ -1090,6 +1096,17 @@ def find_ctrl(control, win_xid=0, mode=None):
 
 def _num(v):
     return v
+
+
+def _ctrl_value(c):
+    if c.ctype == "ActiveX":
+        # the hosted COM object: an emulated WebBrowser driving the WebKitGTK view
+        from .com import ComDispatch, WebBrowser, _proto_setup
+        _proto_setup()
+        if getattr(c, "_com", None) is None:
+            c._com = ComDispatch(WebBrowser(c))
+        return c._com
+    return _num(ctrl_get(c, "Value"))
 
 
 def _gui_item(this, name):

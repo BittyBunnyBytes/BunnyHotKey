@@ -108,7 +108,7 @@ bhk doctor                 # what BHK can use on this machine
   - `Drive*` functions read real mount, label and serial data.
 - **GUI:**
   - MsgBox, InputBox, ToolTip, FileSelect and DirSelect.
-  - `Gui()` with 21 of AutoHotkey's 23 control types: Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, Slider, Progress, GroupBox, Picture, Link and StatusBar. (ActiveX and Custom host Win32 components and can't exist on Linux.)
+  - `Gui()` with 22 of AutoHotkey's 23 control types: Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, Slider, Progress, GroupBox, Picture, Link, StatusBar and the ActiveX web browser (WebKitGTK, optional). Custom controls host Win32 window classes and can't exist on Linux.
   - AHK layout options and events, `SetFont`, `BackColor`, control colours, `Gui.Opt` (AlwaysOnTop, -Caption, ToolWindow, Owner, MinSize...), ListView sorting/columns/checkboxes/icons, image lists, `ContextMenu` and `DropFiles`.
   - `Menu` with submenus, radio items, icons and colours, plus `Gui.MenuBar`.
   - `Control*`, `Edit*`, `ListViewGetContent`, `StatusBarGetText`, `WinGetText`, `WinGetControls` and `MenuSelect` work on the script's own Gui windows (by object, Hwnd, ClassNN such as `Edit1`, or text), like on Windows, and on other programs' windows through AT-SPI (e.g. `ControlGetText("Edit1", "ahk_exe gedit")`, `ControlClick("OK", "Save As")`).

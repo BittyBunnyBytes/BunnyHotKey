@@ -1349,6 +1349,103 @@ class FolderItem(Impl):
         return ""
 
 
+# ---------------------------------------------------------------- the ActiveX web browser (IWebBrowser2)
+class WebBrowser(Impl):
+    iface = "IWebBrowser2"
+
+    def __init__(self, ctrl):
+        self.ctrl = ctrl
+        self.doc = HtmlDocument(self)
+
+    def _op(self, do, **kw):
+        from .guiobj import _srv
+        return _srv().call("web", ctrl=self.ctrl.cid, do=do, **kw)
+
+    def m_navigate(self, url, *a):
+        u = S(url)
+        if u.lower().startswith("about:") and u.lower() != "about:blank":
+            self._op("html", html=u[6:])
+        else:
+            self._op("navigate", url=u if re.match(r"^[a-z][\w+.-]*:", u) else "file://" + _hp(u))
+        return ""
+
+    m_navigate2 = m_navigate
+
+    def m_goback(self):
+        return self._op("back")
+
+    def m_goforward(self):
+        return self._op("forward")
+
+    def m_refresh(self, *a):
+        return self._op("refresh")
+
+    def m_stop(self):
+        return self._op("stop")
+
+    def p_locationurl(self):
+        return self._op("url")
+
+    def p_locationname(self):
+        return self._op("title")
+
+    def p_busy(self):
+        return -1 if self._op("busy") else 0
+
+    def p_readystate(self):
+        return 3 if self._op("busy") else 4      # READYSTATE_INTERACTIVE / COMPLETE
+
+    def p_document(self):
+        return self.doc
+
+    def p_silent(self):
+        return -1
+
+    def s_silent(self, v):
+        pass
+
+
+class HtmlDocument(Impl):
+    """document.write/open/close and parentWindow.execScript, the parts of IHTMLDocument scripts use to fill
+    the browser control."""
+    iface = "IHTMLDocument2"
+
+    def __init__(self, browser):
+        self.browser, self.buf = browser, None
+
+    def m_open(self, *a):
+        self.buf = []
+        return self
+
+    def m_write(self, *parts):
+        if self.buf is None:
+            self.buf = []
+        self.buf.extend(S(p) for p in parts)
+        self.browser._op("html", html="".join(self.buf))
+        return ""
+
+    m_writeln = m_write
+
+    def m_close(self):
+        if self.buf is not None:
+            self.browser._op("html", html="".join(self.buf))
+        self.buf = None
+        return ""
+
+    def p_parentwindow(self):
+        return self
+
+    def m_execscript(self, code, lang="JavaScript"):
+        self.browser._op("script", code=S(code))
+        return ""
+
+    def p_title(self):
+        return self.browser._op("title")
+
+    def p_url(self):
+        return self.browser._op("url")
+
+
 # ---------------------------------------------------------------- WMI (ComObjGet("winmgmts:"))
 class WmiServices(Impl):
     iface = "ISWbemServicesEx"

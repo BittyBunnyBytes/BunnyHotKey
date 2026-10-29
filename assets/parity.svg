@@ -54,9 +54,9 @@
 <text x="685" y="359" font-size="11.5" fill="#59636e">338 full, 1 partial, 5 missing</text>
 <text x="20" y="389" font-size="13" fill="#1f2328">Gui</text>
 <rect x="300" y="377" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="377" width="313.5" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="389" font-size="13" font-weight="700" fill="#2da44e">95%</text>
-<text x="685" y="389" font-size="11.5" fill="#59636e">21 of 23 control types (not ActiveX/Custom)</text>
+<rect x="300" y="377" width="316.8" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="389" font-size="13" font-weight="700" fill="#2da44e">96%</text>
+<text x="685" y="389" font-size="11.5" fill="#59636e">22 of 23 control types (ActiveX = web browser)</text>
 <text x="20" y="419" font-size="13" fill="#1f2328">Win32 controls (Control*, Edit*)</text>
 <rect x="300" y="407" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="407" width="297.0" height="16" rx="4" fill="#2da44e"/>

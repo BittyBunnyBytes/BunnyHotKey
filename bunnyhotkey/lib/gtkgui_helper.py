@@ -1489,6 +1489,8 @@ def make(win, cid, t, opts):
             w.connect("icon-press", lambda *_: dt_popup(c))
             w.connect("button-press-event", lambda *_: dt_popup(c) and False)
         dt_show(c)
+    elif t == "ActiveX":
+        w = make_browser(c, text)
     elif t == "MonthCal":
         w = Gtk.Calendar()
         c["multi"] = bool(opts.get("multi"))
@@ -1528,6 +1530,66 @@ def make(win, cid, t, opts):
         res["header"] = probe.get_preferred_size()[1].height
         probe.destroy()
     return res
+
+
+# ---------------------------------------------------------------- ActiveX: the "Shell.Explorer" web browser
+def _webkit():
+    for ns, ver in (("WebKit2", "4.1"), ("WebKit2", "4.0")):
+        try:
+            gi.require_version(ns, ver)
+            from gi.repository import WebKit2
+            return WebKit2
+        except (ValueError, ImportError):
+            continue
+    return None
+
+
+def make_browser(c, text):
+    """Gui.Add("ActiveX", , "Shell.Explorer" | URL | "mshtml:<html>") hosts WebKitGTK in place of Internet Explorer."""
+    wk = _webkit()
+    if wk is None:
+        raise ValueError("The ActiveX web browser needs WebKitGTK (install webkit2gtk-4.1).")
+    view = wk.WebView()
+    c["web"] = view
+    c["html_buf"] = None
+    spec = text.strip()
+    if spec.lower().startswith("mshtml:"):
+        view.load_html(spec[7:], "about:blank")
+    elif re.match(r"^[a-z][\w+.-]*:", spec) and not spec.lower().startswith("shell."):
+        view.load_uri(spec)
+    else:
+        view.load_html("", "about:blank")
+    sw = Gtk.ScrolledWindow()
+    sw.add(view)
+    return sw
+
+
+def web_op(c, req):
+    view = c.get("web")
+    if view is None:
+        raise ValueError("Not a web browser control.")
+    do = req["do"]
+    if do == "navigate":
+        view.load_uri(req["url"])
+    elif do == "html":
+        view.load_html(req["html"], req.get("base") or "about:blank")
+    elif do == "back":
+        view.go_back()
+    elif do == "forward":
+        view.go_forward()
+    elif do == "refresh":
+        view.reload()
+    elif do == "stop":
+        view.stop_loading()
+    elif do == "url":
+        return view.get_uri() or ""
+    elif do == "title":
+        return view.get_title() or ""
+    elif do == "busy":
+        return int(view.is_loading())
+    elif do == "script":
+        view.run_javascript(req["code"], None, None, None)
+    return ""
 
 
 # ---------------------------------------------------------------- menus (Menu.Show, Gui.MenuBar)
@@ -1781,6 +1843,8 @@ def handle(req):
         if isinstance(c["w"], Gtk.Button):
             c["w"].clicked()
         return True
+    if op == "web":
+        return web_op(ctrls[req["ctrl"]], req)
     if op == "sb":
         c = ctrls[req["ctrl"]]
         if req["do"] == "parts":
@@ -2090,7 +2154,8 @@ def on_line(source, _cond):
     try:
         emit({"reply": req["id"], "value": handle(req)})
     except Exception as e:
-        emit({"reply": req["id"], "error": f"{type(e).__name__}: {e}"})
+        # our own ValueErrors carry a message meant for the script; anything else is reported with its type
+        emit({"reply": req["id"], "error": str(e) if type(e) is ValueError else f"{type(e).__name__}: {e}"})
     return True
 
 

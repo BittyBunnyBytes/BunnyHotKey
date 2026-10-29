@@ -142,6 +142,6 @@ out("submit " s.Page " " s.Nick " " s.Count " " s.HK " " s.When " " s.Day " " s.
 g.Opt("-AlwaysOnTop +ToolWindow")
 try g.AddActiveX("w100 h100", "Shell.Explorer")
 catch Error as e
-    out("activex " (InStr(e.Message, "not supported") > 0))
+    out("activex " (InStr(e.Message, "WebKitGTK") > 0 || InStr(e.Message, "not supported") > 0))
 g.Destroy()
 out("done")
