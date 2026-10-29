@@ -247,6 +247,8 @@ class Compiler:
             return ("global", rt.globals[key])
         if key in rt.builtins:
             return ("const", rt.builtins[key])
+        if scope.assume_global:
+            return ("global", self._gcell(name))
         return ("local", scope.add_local(name))
 
     def var_getter(self, name, scope, maybe=False):
@@ -259,6 +261,8 @@ class Compiler:
             def g(f):
                 c = f.cells[i]
                 v = c.value
+                if v is UNSET and getattr(rt, "script_version", "2") == "1":
+                    return ""
                 if v is UNSET:
                     rt.unset_error(c)
                 return v
@@ -270,6 +274,8 @@ class Compiler:
             def g(f):
                 c = f.free[i]
                 v = c.value
+                if v is UNSET and getattr(rt, "script_version", "2") == "1":
+                    return ""
                 if v is UNSET:
                     rt.unset_error(c)
                 return v
@@ -285,6 +291,8 @@ class Compiler:
                 return gm
             def g(f):
                 v = cell.value
+                if v is UNSET and getattr(rt, "script_version", "2") == "1":
+                    return ""
                 if v is UNSET:
                     rt.unset_error(cell)
                 if type(v) is AhkClass:

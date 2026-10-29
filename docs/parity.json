@@ -1,6 +1,6 @@
 {
   "_help": "Edit this file, then run: python3 tools/parity_chart.py  (redraws assets/parity.svg and the summaries in README.md and docs/PARITY.md). Areas with \"measure\" are computed automatically; the others use \"percent\". Order here = order in the chart.",
-  "title": "Bunny Hot Key - parity with AutoHotkey v2",
+  "title": "Bunny Hot Key - parity with AutoHotkey v2 and v1",
   "subtitle": "Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md",
   "corpus": {
     "loaded": 327,
@@ -85,6 +85,32 @@
     "**Other apps' controls:** read, typed into, clicked, checked, chosen and sent common Win32 messages through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.",
     "**Windows DLLs:** DllCall emulates the common Win32 APIs (user32, kernel32, shell32, ole32/oleaut32) and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.",
     "**Custom controls of unregistered classes:** `Gui.Add(\"Custom\")` covers the standard Win32 classes plus SysIPAddress32, RichEdit and Scintilla; classes a script registers itself with RegisterClassEx have no Linux equivalent.",
-    "**Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`), and control messages reach other apps' widgets through AT-SPI; X11 programs have no Win32 message queue for anything else."
-  ]
+    "**Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`), and control messages reach other apps' widgets through AT-SPI; X11 programs have no Win32 message queue for anything else.",
+    "**AutoHotkey v1 beyond hotkey scripts:** the v1 frontend covers common keyboard/mouse scripts; legacy `Gui`/`MsgBox` commands, `Gosub`, traditional `If var = value`, `ErrorLevel` and v1 objects are not implemented (see [docs/V1.md](docs/V1.md))."
+  ],
+  "v1": {
+    "heading": "AutoHotkey v1 (compatibility frontend - docs/V1.md)",
+    "areas": [
+      {
+        "area": "v1 scripts in tests/v1 that load",
+        "measure": "v1:scripts",
+        "note": "{loaded} of {total} hotkey scripts (game macros)"
+      },
+      {
+        "area": "v1 hotkey syntax & #If directives",
+        "percent": 85,
+        "note": "unbraced bodies, remaps, #If, #IfWin*"
+      },
+      {
+        "area": "v1 commands (comma syntax)",
+        "measure": "v1:commands",
+        "note": "{supported} of {count}: Send*, Mouse*, Win* waits"
+      },
+      {
+        "area": "v1 language (If var =, Gosub, objects)",
+        "percent": 35,
+        "note": "= and %var% work; legacy If/Gosub don't"
+      }
+    ]
+  }
 }

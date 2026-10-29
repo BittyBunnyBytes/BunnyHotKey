@@ -1,5 +1,6 @@
 """bhk - Bunny Hot Key command line.
 
+  bhk --ahk-version=auto|1|2 SCRIPT.ahk  select script syntax (default: auto)
   bhk SCRIPT.ahk [args...]       run a script (AutoHotkey switches /ErrorStdOut /force /restart /Validate work too)
   bhk install [VERSION|FILE]     install an official AutoHotkey v2 release into the BHK prefix (default: latest)
   bhk versions                   list installed AutoHotkey versions
@@ -34,6 +35,12 @@ def main(argv=None) -> int:
             options["validate"] = True
             if al == "ilib" and argv:
                 argv.pop(0)
+        elif al == "ahk-version" or al.startswith("ahk-version="):
+            version = a.split("=", 1)[1] if "=" in a else (argv.pop(0) if argv else "")
+            if version not in ("auto", "1", "2"):
+                print("bhk: --ahk-version must be auto, 1, or 2", file=sys.stderr)
+                return 2
+            options["ahk_version"] = version
         elif al.startswith("backend"):
             options["backend"] = a.split("=", 1)[1] if "=" in a else argv.pop(0)
         elif al == "no-tray":

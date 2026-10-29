@@ -32,7 +32,7 @@ def main():
                 if g != w:
                     print(f"  line {i + 1}: got {g!r} want {w!r}")
                     break
-    py_tests = ["test_input.py", "test_tray.py", "test_ipc.py", "test_com_http.py"]
+    py_tests = ["test_v1.py", "test_input.py", "test_tray.py", "test_ipc.py", "test_com_http.py"]
     for t in py_tests:
         r = subprocess.run([sys.executable, os.path.join(HERE, t)], capture_output=True, text=True, cwd=ROOT)
         print(f"PASS {t}" if r.returncode == 0 else f"FAIL {t}\n" + r.stdout)

@@ -1,6 +1,7 @@
 """Recreate the parity visual: python3 tools/parity_chart.py
 
 1. Measures every AutoHotkey built-in (tools/ahk_builtins.txt) against BHK's implementation.
+   Measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, and tests/v1/*.ahk loading.
 2. Reads docs/parity.json (areas, notes, hand-scored percentages, the "missing" list).
 3. Writes assets/parity.svg and refreshes the generated blocks in README.md and docs/PARITY.md
    (between <!-- parity:...:start --> and <!-- parity:...:end --> markers).
@@ -13,6 +14,7 @@ import inspect
 import json
 import os
 import re
+import subprocess
 import sys
 from xml.sax.saxutils import escape
 
@@ -75,6 +77,8 @@ def measure(spec, cls, data):
     if kind == "corpus":
         c = data["corpus"]
         return round(100 * c["loaded"] / c["total"]), dict(c)
+    if kind == "v1":
+        return measure_v1(group)
     pred = GROUPS[group]
     st = [s for n, s in cls.items() if pred(n)]
     full, part, miss = st.count("full"), st.count("partial"), st.count("missing")
@@ -82,11 +86,26 @@ def measure(spec, cls, data):
     return pct, {"full": full, "partial": part, "missing": miss, "count": len(st)}
 
 
+def measure_v1(what):
+    if what == "scripts":
+        d = os.path.join(ROOT, "tests", "v1")
+        files = sorted(f for f in os.listdir(d) if f.endswith(".ahk"))
+        ok = sum(subprocess.run([sys.executable, "-m", "bunnyhotkey", "--console", "--backend=null", "--validate",
+                                 os.path.join(d, f)], cwd=ROOT, capture_output=True).returncode == 0 for f in files)
+        return (round(100 * ok / len(files)) if files else 0), {"loaded": ok, "total": len(files)}
+    from bunnyhotkey.legacy import COMMANDS
+    names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_v1_commands.txt")) if l.strip() and not l.startswith("#")]
+    supported = set(COMMANDS) | {"mousegetpos"}
+    n = sum(x.lower() in supported for x in names)
+    return round(100 * n / len(names)), {"supported": n, "count": len(names)}
+
+
 def color(p):
     return "#2da44e" if p >= 90 else "#d4a72c" if p >= 60 else "#cf222e"
 
 
 def render(data, rows):
+    """rows: (area, pct, note), or (heading,) for a section heading."""
     row, top, label_w, bar_w = 30, 74, 300, 330
     h = top + row * len(rows) + 54
     w = label_w + bar_w + 290
@@ -95,8 +114,13 @@ def render(data, rows):
            f'<rect width="{w}" height="{h}" rx="12" fill="#ffffff" stroke="#d0d7de"/>',
            f'<text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">{escape(data["title"])}</text>',
            f'<text x="20" y="56" font-size="12.5" fill="#59636e">{escape(data["subtitle"])}</text>']
-    for i, (area, pct, note) in enumerate(rows):
+    for i, r in enumerate(rows):
         y = top + i * row
+        if len(r) == 1:
+            out.append(f'<line x1="20" y1="{y + 4}" x2="{w - 20}" y2="{y + 4}" stroke="#d0d7de"/>')
+            out.append(f'<text x="20" y="{y + 22}" font-size="13.5" font-weight="700" fill="#1f2328">{escape(r[0])}</text>')
+            continue
+        area, pct, note = r
         out.append(f'<text x="20" y="{y + 15}" font-size="13" fill="#1f2328">{escape(area)}</text>')
         out.append(f'<rect x="{label_w}" y="{y + 3}" width="{bar_w}" height="16" rx="4" fill="#eef1f4"/>')
         if pct:
@@ -137,6 +161,13 @@ def main():
             pct, vals = a["percent"], {}
         values[a["area"]] = pct
         rows.append((a["area"], pct, a.get("note", "").format(**vals)))
+    v1 = data.get("v1")
+    if v1:
+        rows.append((v1["heading"],))
+        for a in v1["areas"]:
+            pct, vals = measure(a["measure"], cls, data) if "measure" in a else (a["percent"], {})
+            values[a["area"]] = pct
+            rows.append((a["area"], pct, a.get("note", "").format(**vals)))
     with open(os.path.join(ROOT, "assets", "parity.svg"), "w", encoding="utf-8") as fh:
         fh.write(render(data, rows))
     _, allv = measure("builtins:all", cls, data)
@@ -144,7 +175,11 @@ def main():
     api = values.get("All built-in functions", 0)
     summary = (f"**In short:** the AutoHotkey v2 *language* is essentially complete ({lang}%), and\n"
                f"**{api}% of its built-in function API** is reproduced ({allv['full']} full, {allv['partial']} partial, "
-               f"{allv['missing']} missing).\n\n**Missing or left to do:**\n"
+               f"{allv['missing']} missing).\n"
+               + (f"**AutoHotkey v1:** common hotkey scripts run through a compatibility frontend "
+                  f"({values.get(data['v1']['areas'][0]['area'], 0)}% of the v1 test scripts load); "
+                  f"see [docs/V1.md](docs/V1.md).\n" if data.get("v1") else "")
+               + "\n**Missing or left to do:**\n"
                + "\n".join(f"- {m}" for m in data["missing"])
                + "\n\nThe full breakdown is in [docs/PARITY.md](docs/PARITY.md).")
     replace_block("README.md", "summary", summary)

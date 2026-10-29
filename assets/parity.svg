@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="920" height="548" viewBox="0 0 920 548" font-family="Segoe UI, Helvetica, Arial, sans-serif">
-<rect width="920" height="548" rx="12" fill="#ffffff" stroke="#d0d7de"/>
-<text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">Bunny Hot Key - parity with AutoHotkey v2</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="698" viewBox="0 0 920 698" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="920" height="698" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">Bunny Hot Key - parity with AutoHotkey v2 and v1</text>
 <text x="20" y="56" font-size="12.5" fill="#59636e">Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md</text>
 <text x="20" y="89" font-size="13" fill="#1f2328">Language syntax &amp; semantics (v2.0)</text>
 <rect x="300" y="77" width="330" height="16" rx="4" fill="#eef1f4"/>
@@ -71,10 +71,32 @@
 <rect x="300" y="467" width="330" height="16" rx="4" fill="#eef1f4"/>
 <text x="640" y="479" font-size="13" font-weight="700" fill="#cf222e">0%</text>
 <text x="685" y="479" font-size="11.5" fill="#59636e">dropped for now</text>
-<rect x="20" y="511" width="12" height="12" rx="3" fill="#2da44e"/>
-<text x="38" y="522" font-size="12" fill="#1f2328">90%+ complete</text>
-<rect x="210" y="511" width="12" height="12" rx="3" fill="#d4a72c"/>
-<text x="228" y="522" font-size="12" fill="#1f2328">partial: 60-89%</text>
-<rect x="400" y="511" width="12" height="12" rx="3" fill="#cf222e"/>
-<text x="418" y="522" font-size="12" fill="#1f2328">missing / left to do</text>
+<line x1="20" y1="498" x2="900" y2="498" stroke="#d0d7de"/>
+<text x="20" y="516" font-size="13.5" font-weight="700" fill="#1f2328">AutoHotkey v1 (compatibility frontend - docs/V1.md)</text>
+<text x="20" y="539" font-size="13" fill="#1f2328">v1 scripts in tests/v1 that load</text>
+<rect x="300" y="527" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="527" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="539" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="539" font-size="11.5" fill="#59636e">6 of 6 hotkey scripts (game macros)</text>
+<text x="20" y="569" font-size="13" fill="#1f2328">v1 hotkey syntax &amp; #If directives</text>
+<rect x="300" y="557" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="557" width="280.5" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="569" font-size="13" font-weight="700" fill="#d4a72c">85%</text>
+<text x="685" y="569" font-size="11.5" fill="#59636e">unbraced bodies, remaps, #If, #IfWin*</text>
+<text x="20" y="599" font-size="13" fill="#1f2328">v1 commands (comma syntax)</text>
+<rect x="300" y="587" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="587" width="52.8" height="16" rx="4" fill="#cf222e"/>
+<text x="640" y="599" font-size="13" font-weight="700" fill="#cf222e">16%</text>
+<text x="685" y="599" font-size="11.5" fill="#59636e">30 of 186: Send*, Mouse*, Win* waits</text>
+<text x="20" y="629" font-size="13" fill="#1f2328">v1 language (If var =, Gosub, objects)</text>
+<rect x="300" y="617" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="617" width="115.5" height="16" rx="4" fill="#cf222e"/>
+<text x="640" y="629" font-size="13" font-weight="700" fill="#cf222e">35%</text>
+<text x="685" y="629" font-size="11.5" fill="#59636e">= and %var% work; legacy If/Gosub don't</text>
+<rect x="20" y="661" width="12" height="12" rx="3" fill="#2da44e"/>
+<text x="38" y="672" font-size="12" fill="#1f2328">90%+ complete</text>
+<rect x="210" y="661" width="12" height="12" rx="3" fill="#d4a72c"/>
+<text x="228" y="672" font-size="12" fill="#1f2328">partial: 60-89%</text>
+<rect x="400" y="661" width="12" height="12" rx="3" fill="#cf222e"/>
+<text x="418" y="672" font-size="12" fill="#1f2328">missing / left to do</text>
 </svg>

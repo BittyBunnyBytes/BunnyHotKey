@@ -11,11 +11,12 @@
 
 ## How close is it to AutoHotkey?
 
-<p align="center"><img src="assets/parity.svg" alt="Parity with AutoHotkey v2 by area: language 99%, built-in functions 97%, Gui 92%, COM and Wayland 0%" width="860"></p>
+<p align="center"><img src="assets/parity.svg" alt="Parity with AutoHotkey v2 by area, plus a section for the AutoHotkey v1 compatibility frontend" width="860"></p>
 
 <!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
 **100% of its built-in function API** is reproduced (343 full, 1 partial, 0 missing).
+**AutoHotkey v1:** common hotkey scripts run through a compatibility frontend (100% of the v1 test scripts load); see [docs/V1.md](docs/V1.md).
 
 **Missing or left to do:**
 - **Windows COM servers:** objects are real native COM (ComCall, ComObjQuery, ComObjFromPtr, IDispatch both ways, a running-object table shared by BHK scripts), and WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application, WMI and the web browser are emulated; servers that only exist as Windows binaries (Office, UIAutomation, WebView2) aren't available.
@@ -24,12 +25,13 @@
 - **Windows DLLs:** DllCall emulates the common Win32 APIs (user32, kernel32, shell32, ole32/oleaut32) and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
 - **Custom controls of unregistered classes:** `Gui.Add("Custom")` covers the standard Win32 classes plus SysIPAddress32, RichEdit and Scintilla; classes a script registers itself with RegisterClassEx have no Linux equivalent.
 - **Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`), and control messages reach other apps' widgets through AT-SPI; X11 programs have no Win32 message queue for anything else.
+- **AutoHotkey v1 beyond hotkey scripts:** the v1 frontend covers common keyboard/mouse scripts; legacy `Gui`/`MsgBox` commands, `Gosub`, traditional `If var = value`, `ErrorLevel` and v1 objects are not implemented (see [docs/V1.md](docs/V1.md)).
 
 The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
 <!-- parity:summary:end -->
 
 
-Run **AutoHotkey v2** scripts natively on **Linux (X11)**.
+Run **AutoHotkey v2** scripts and supported **v1 hotkey scripts** natively on **Linux (X11)**.
 
 BHK is a compatibility layer in the spirit of Wine/Proton, but it doesn't
 emulate Windows. It reimplements the AutoHotkey v2 language and runtime in
@@ -134,7 +136,7 @@ bhk doctor                 # what BHK can use on this machine
 
 ## Not supported
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
-- **AutoHotkey v1 scripts:** BHK targets v2. A v1 `#Requires` gets a clear message.
+- **AutoHotkey v1 scripts:** common hotkey scripts are supported through a compatibility frontend; full v1 language/API parity is not claimed. See [v1 support](docs/V1.md).
 - **COM servers and DLLs that only exist as Windows binaries** (Office, UIAutomation, WebView2, arbitrary `.dll`s). COM itself works natively (`ComCall`, `ComObjQuery`, `ComObjActive` between BHK scripts), the common automation objects (`WinHttp.WinHttpRequest.5.1`, `MSXML2.XMLHTTP`, `Scripting.Dictionary`, `WScript.Shell`, `Scripting.FileSystemObject`, `ADODB.Stream`, `SAPI.SpVoice`, `Shell.Application`, WMI via `ComObjGet("winmgmts:")`) are emulated, and DllCall emulates the common Win32 APIs.
 - **Moving or restyling other programs' controls:** other apps' widgets are read and operated through the accessibility bus (AT-SPI), which has no way to move, hide or restyle them. Apps that don't publish accessibility data (e.g. Qt without `QT_ACCESSIBILITY=1`) stay opaque.
 
@@ -142,7 +144,7 @@ bhk doctor                 # what BHK can use on this machine
 If you are an AI agent trying to use this project, these are the facts you need:
 - **Update / uninstall:** `bhk update` (git pull or ZIP re-download), `bhk uninstall [--purge] [--yes]`.
 - **Command:** `bhk <script.ahk> [args]`, or `python3 -m bunnyhotkey <script.ahk>` from the repo root with no install. Exit code = the script's `ExitApp` code; 2 = load error.
-- **Scripts must be AutoHotkey v2 syntax** (`MsgBox "hi"`, `x := 1`, functions with `()`). v1 syntax (`MsgBox, hi`, `%var%` everywhere) will not load.
+- **Script syntax:** v2 remains the default for ambiguous files. Common v1 hotkey syntax is detected automatically; use `--ahk-version=1` for ambiguous legacy files. See [supported v1 syntax and limits](docs/V1.md).
 - **Headless / CI use:** pass `--console --backend=null`.
   - Errors go to stderr in AutoHotkey's `/ErrorStdOut` format: `file (line) : ==> message` / `     Specifically: extra`.
   - `FileAppend text, "*"` writes to stdout. Use it to get results out of a script.

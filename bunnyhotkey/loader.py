@@ -121,6 +121,10 @@ class Loader:
         from .parser import parse_lines
         from .compiler import Compiler
         lines = self.read_file(path)
+        from .legacy import detect, translate
+        self.rt.script_version = detect(lines, self.rt.options.get("ahk_version", "auto"))
+        if self.rt.script_version == "1":
+            lines = translate(lines)
         self.pre_directives(lines)
         stmts = parse_lines(lines, path)
         comp = Compiler(self.rt)
