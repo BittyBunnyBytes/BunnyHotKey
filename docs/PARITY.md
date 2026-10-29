@@ -24,7 +24,7 @@ Result: **332 of 344 built-ins (97%)** are called by a passing run test.
 - **Real-world scripts:** 337 scripts from seven v2 repositories are loaded and compiled
   (`docs/COMPATIBILITY.md`); they're not executed (that would run downloaded third-party code).
 - **v1:** the v1 suites (`v1_language`, `v1_gui`, `v1_hotkeys`), the v1.1 command table
-  (`tools/ahk_v1_commands.txt`) and the hotkey scripts in `tests/v1`.
+  (`tools/ahk_v1_commands.txt`) and the public v1 script corpus (`tools/v1_corpus.py`).
 - **Updating the chart:** `python3 tools/parity_chart.py` runs every suite (the desktop ones take a few minutes
   and need the X11 session), redraws `assets/parity.svg` and rewrites the marked blocks in `README.md` and this
   file. `docs/parity.json` holds the area names, notes and the "missing" list.

@@ -92,11 +92,6 @@
     "heading": "AutoHotkey v1 (compatibility frontend - docs/V1.md)",
     "areas": [
       {
-        "area": "v1 scripts in tests/v1 that load",
-        "measure": "v1:scripts",
-        "note": "{loaded} of {total} hotkey scripts (game macros)"
-      },
-      {
         "area": "Public v1 scripts that load",
         "measure": "v1:corpus",
         "note": "{loaded} of {total} from 11 repos (V1_CORPUS.md)"

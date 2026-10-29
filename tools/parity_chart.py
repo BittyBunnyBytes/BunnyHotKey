@@ -4,7 +4,7 @@
    pass rate of its suite, and each built-in group's is the share of its functions (tools/ahk_builtins.txt)
    that a passing run test calls - a passing conformance section or a regression script (tests/scripts).
    Desktop suites drive the real X11 session (synthetic input, test windows, the tray).
-   Also measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, tests/v1 loading, and
+   Also measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, and
    the public v1 script corpus (tools/v1_corpus.py; loaded and compiled, not run).
 2. Reads docs/parity.json (areas, notes, the "missing" list).
 3. Writes assets/parity.svg and refreshes the generated blocks in README.md and docs/PARITY.md
@@ -161,12 +161,6 @@ def measure_v1(what):
         return (round(100 * loaded / total) if total else 0), {"loaded": loaded, "total": total}
     if what in ("language", "gui", "hotkeys"):
         return measure("suite:v1_" + what, None, None)
-    if what == "scripts":
-        d = os.path.join(ROOT, "tests", "v1")
-        files = sorted(f for f in os.listdir(d) if f.endswith(".ahk"))
-        ok = sum(subprocess.run([sys.executable, "-m", "bunnyhotkey", "--console", "--backend=null", "--validate",
-                                 os.path.join(d, f)], cwd=ROOT, capture_output=True).returncode == 0 for f in files)
-        return (round(100 * ok / len(files)) if files else 0), {"loaded": ok, "total": len(files)}
     from bunnyhotkey.legacy import COMMANDS
     names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_v1_commands.txt")) if l.strip() and not l.startswith("#")]
     supported = set(COMMANDS) | {"mousegetpos"}
@@ -252,7 +246,7 @@ def main():
                f"**{allv['covered']} of {allv['count']} built-in functions ({api}%)** are called by a passing run test.\n"
                + (f"**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - "
                   + ", ".join(f"{a['area'].split(' (')[0].replace('v1 ', '', 1)} {values.get(a['area'], 0)}%"
-                              for a in data["v1"]["areas"][1:])
+                              for a in data["v1"]["areas"])
                   + "; see [docs/V1.md](docs/V1.md).\n" if data.get("v1") else "")
                + "\n**Missing or left to do:**\n"
                + "\n".join(f"- {m}" for m in data["missing"])
