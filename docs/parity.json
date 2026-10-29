@@ -46,7 +46,7 @@
     {
       "area": "Tray icon & menu",
       "percent": 99,
-      "note": "AHK_NOTIFYICON clicks, balloons; XFCE, Cinnamon"
+      "note": "AHK_NOTIFYICON clicks, balloons"
     },
     {
       "area": "Hotkeys & hotstrings (X11)",
@@ -61,17 +61,17 @@
     {
       "area": "Gui",
       "percent": 98,
-      "note": "23 of 23 control types (Custom: Win32 classes)"
+      "note": "23 of 23 control types"
     },
     {
       "area": "Win32 controls (Control*, Edit*)",
-      "note": "Win32 messages, OnNotify/OnCommand; other apps via AT-SPI",
+      "note": "Win32 messages, OnNotify; AT-SPI apps",
       "percent": 96
     },
     {
       "area": "COM / ActiveX",
       "percent": 75,
-      "note": "native vtables, ComCall, ROT; emulated servers"
+      "note": "native vtables, ComCall, ROT"
     },
     {
       "area": "Wayland input",
