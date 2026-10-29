@@ -3,7 +3,9 @@
   bhk SCRIPT.ahk [args...]       run a script (AutoHotkey switches /ErrorStdOut /force /restart /Validate work too)
   bhk install [VERSION|FILE]     install an official AutoHotkey v2 release into the BHK prefix (default: latest)
   bhk versions                   list installed AutoHotkey versions
-  bhk uninstall VERSION          remove an installed version
+  bhk uninstall VERSION          remove an installed AutoHotkey version
+  bhk update                     update Bunny Hot Key itself from GitHub
+  bhk uninstall [--purge]        uninstall Bunny Hot Key (launcher, menu entry, file type; asks about prefix/folder)
   bhk dash | windowspy | launcher  run AutoHotkey's own UX scripts from the newest install
   bhk new NAME                   create a new script from AutoHotkey's template
   bhk setup-desktop              register .ahk files, the icon and menu entries with your desktop
@@ -54,7 +56,7 @@ def main(argv=None) -> int:
         return 0
     cmd = argv[0]
     if cmd in ("install", "versions", "list", "uninstall", "dash", "windowspy", "launcher", "new", "setup-desktop",
-               "doctor") and not os.path.exists(cmd):
+               "doctor", "update") and not os.path.exists(cmd):
         from . import manager
         return manager.command(cmd, argv[1:], options)
     if cmd == "run":
@@ -87,7 +89,15 @@ if __name__ == "__main__":
     import threading
     threading.stack_size(64 * 1024 * 1024)
     result = {}
-    t = threading.Thread(target=lambda: result.setdefault("code", main()), name="bhk-script")
+
+    def run():
+        try:
+            result["code"] = main()
+        except SystemExit as e:      # sys.exit()/SystemExit("message") inside the thread
+            if isinstance(e.code, str):
+                print(e.code, file=sys.stderr)
+            result["code"] = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+    t = threading.Thread(target=run, name="bhk-script")
     t.start()
     t.join()
     sys.exit(result.get("code", 1))

@@ -1,4 +1,4 @@
-"""bhk install / versions / uninstall / dash / windowspy / launcher / new / setup-desktop / doctor.
+"""bhk install / versions / uninstall / update / dash / windowspy / launcher / new / setup-desktop / doctor.
 
 Installs official AutoHotkey v2 releases (github.com/AutoHotkey/AutoHotkey) into the
 BHK prefix, verifying each download against the SHA-256 digest GitHub publishes.
@@ -99,9 +99,124 @@ def versions(args):
     return 0
 
 
+def _ask(question, yes):
+    if yes:
+        return True
+    if not sys.stdin.isatty():
+        return False
+    return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
+
+
+def _desktop_files():
+    """Everything setup-desktop writes outside the BHK folder."""
+    home = os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    files = [os.path.join(home, ".local", "bin", "bhk"),
+             os.path.join(data, "applications", "bunnyhotkey.desktop"),
+             os.path.join(data, "mime", "packages", "bunnyhotkey.xml"),
+             os.path.join(data, "icons", "hicolor", "scalable", "apps", "bunnyhotkey.svg")]
+    files += [os.path.join(data, "icons", "hicolor", f"{s}x{s}", "apps", "bunnyhotkey.png")
+              for s in (16, 32, 48, 64, 128, 256)]
+    return data, files
+
+
+def _refresh_desktop_db(data):
+    for cmd in (["update-mime-database", os.path.join(data, "mime")],
+                ["update-desktop-database", os.path.join(data, "applications")],
+                ["gtk-update-icon-cache", "-f", "-t", os.path.join(data, "icons", "hicolor")]):
+        if shutil.which(cmd[0]):
+            subprocess.run(cmd, capture_output=True)
+
+
+def uninstall_self(args):
+    """bhk uninstall [--purge] [--yes]: remove the launcher and desktop integration. --purge also deletes the
+    prefix; --yes answers yes to every question (prefix and the BHK folder itself)."""
+    yes = "--yes" in args or "-y" in args
+    purge = "--purge" in args
+    data, files = _desktop_files()
+    removed = [f for f in files if os.path.exists(f)]
+    for f in removed:
+        os.remove(f)
+    _refresh_desktop_db(data)
+    print(f"Removed the bhk launcher, menu entry, icons and .ahk file type ({len(removed)} files).")
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    default_dir = os.path.join(base, "BunnyHotKey")
+    root = os.environ.get("BHK_PREFIX") or os.path.join(default_dir, "prefix")
+    if os.path.isdir(root) and (purge or _ask(f"Also delete the BHK prefix {root} "
+                                              "(installed AutoHotkey versions, emulated registry, C: drive)?", yes)):
+        shutil.rmtree(default_dir if root == os.path.join(default_dir, "prefix") else root, ignore_errors=True)
+        print(f"Deleted {root}")
+    dirty = os.path.isdir(os.path.join(ROOT, ".git")) and shutil.which("git") and \
+        _git("status", "--porcelain", check=False).stdout.strip()
+    if dirty:
+        print(f"Note: {ROOT} has uncommitted changes.")
+    if _ask(f"Also delete the Bunny Hot Key folder {ROOT}?", yes):
+        shutil.rmtree(ROOT, ignore_errors=True)
+        print(f"Deleted {ROOT}. Bunny Hot Key is uninstalled.")
+    else:
+        print(f"The Bunny Hot Key folder is still at {ROOT}; delete it to finish uninstalling.")
+    return 0
+
+
+REPO = "BittyBunnyBytes/BunnyHotKey"
+
+
+def _git(*a, check=True):
+    return subprocess.run(["git", "-C", ROOT, *a], capture_output=True, text=True, check=check)
+
+
+def update(args):
+    """bhk update: pull the latest Bunny Hot Key from GitHub (git checkouts) or download and unpack it (zip
+    installs), then refresh the desktop integration if it was set up."""
+    from . import __version__ as old
+    if os.path.isdir(os.path.join(ROOT, ".git")) and shutil.which("git"):
+        if _git("status", "--porcelain", "--untracked-files=no").stdout.strip() and "--force" not in args:
+            raise SystemExit(f"bhk: {ROOT} has local changes; commit or stash them first (or: bhk update --force)")
+        before = _git("rev-parse", "HEAD").stdout.strip()
+        r = _git("pull", "--ff-only", check=False)
+        if r.returncode:
+            raise SystemExit(f"bhk: git pull failed:\n{r.stderr.strip()}")
+        after = _git("rev-parse", "HEAD").stdout.strip()
+        if before == after:
+            print(f"Bunny Hot Key is up to date ({old}, {after[:7]}).")
+            return 0
+        log = _git("log", "--oneline", f"{before}..{after}").stdout.strip()
+        print(f"Updated {before[:7]} -> {after[:7]}:\n{log}")
+    else:
+        branch = args[0] if args and not args[0].startswith("-") else "main"
+        url = f"https://codeload.github.com/{REPO}/tar.gz/refs/heads/{branch}"
+        print(f"Downloading {url}")
+        import tarfile
+        with tempfile.TemporaryDirectory() as tmp:
+            arc = os.path.join(tmp, "bhk.tar.gz")
+            with urllib.request.urlopen(url, timeout=60) as resp, open(arc, "wb") as fh:
+                shutil.copyfileobj(resp, fh)
+            with tarfile.open(arc) as tf:
+                tf.extractall(tmp, filter="data")
+            src = next(os.path.join(tmp, d) for d in os.listdir(tmp) if os.path.isdir(os.path.join(tmp, d)))
+            if not os.path.isfile(os.path.join(src, "bunnyhotkey", "__main__.py")):
+                raise SystemExit("bhk: the download doesn't look like Bunny Hot Key; nothing was changed")
+            for name in os.listdir(src):
+                dst = os.path.join(ROOT, name)
+                if os.path.isdir(dst) and not os.path.islink(dst):
+                    shutil.rmtree(dst)
+                if os.path.isdir(os.path.join(src, name)):
+                    shutil.copytree(os.path.join(src, name), dst)
+                else:
+                    shutil.copy2(os.path.join(src, name), dst)
+        print(f"Installed the latest {branch} into {ROOT}.")
+    sys.stdout.flush()
+    if os.path.exists(_desktop_files()[1][0]):
+        subprocess.run([sys.executable, "-m", "bunnyhotkey", "setup-desktop"], cwd=ROOT)
+    new = subprocess.run([sys.executable, "-c", "import bunnyhotkey; print(bunnyhotkey.__version__)"], cwd=ROOT,
+                         capture_output=True, text=True).stdout.strip()
+    print(f"Bunny Hot Key {old} -> {new or '?'}")
+    return 0
+
+
 def uninstall(args):
-    if not args:
-        raise SystemExit("usage: bhk uninstall VERSION")
+    if not args or args[0].startswith("-") or args[0].lower() in ("bhk", "self", "bunnyhotkey"):
+        return uninstall_self([a for a in args if a.startswith("-")])
     vers = installed_versions()
     info = vers.pop(args[0], None)
     if info is None:
@@ -182,11 +297,13 @@ def doctor(args):
           f"WAYLAND_DISPLAY={os.environ.get('WAYLAND_DISPLAY', '')}")
     print(f"Input backend: {detect(_R())}")
     try:
-        import tkinter  # noqa: F401
-        tk = "yes"
-    except ImportError:
-        tk = "no  (sudo pacman -S tk  -> Gui, MsgBox, InputBox, ToolTip)"
-    print(f"tkinter:       {tk}")
+        import gi
+        gi.require_version("Gtk", "3.0")
+        from gi.repository import Gtk  # noqa: F401
+        gtk = "yes"
+    except (ImportError, ValueError):
+        gtk = "no  (install PyGObject + GTK 3 -> Gui, MsgBox, InputBox, ToolTip, tray)"
+    print(f"GTK 3:         {gtk}")
     for tool in ("wine", "zenity", "kdialog", "notify-send", "wpctl", "xclip", "wl-copy"):
         print(f"{tool + ':':15}{'yes' if shutil.which(tool) else 'no'}")
     return 0
@@ -199,6 +316,8 @@ def command(cmd, args, options):
         return versions(args)
     if cmd == "uninstall":
         return uninstall(args)
+    if cmd == "update":
+        return update(args)
     if cmd == "dash":
         return _run_ux("ui-dash.ahk", args)
     if cmd == "windowspy":

@@ -44,6 +44,25 @@ cd BunnyHotKey
 python3 -m bunnyhotkey setup-desktop   # puts `bhk` in ~/.local/bin, icon, .ahk file association
 bhk install                            # optional: official AutoHotkey v2 files (Window Spy, Dash, templates)
 ```
+No git? Download the ZIP from GitHub (Code → Download ZIP), unpack it anywhere and run the same
+`setup-desktop` command from inside the folder.
+
+### Update
+```sh
+bhk update        # pulls the latest version from GitHub (git clone) or re-downloads it (ZIP install)
+```
+A git checkout with local changes is left alone unless you pass `--force`. The launcher, icon and
+file association are refreshed automatically.
+
+### Uninstall
+```sh
+bhk uninstall           # removes the bhk launcher, menu entry, icon and .ahk file type, then asks
+                        # whether to delete the prefix and the Bunny Hot Key folder too
+bhk uninstall --purge   # also deletes the prefix (installed AutoHotkey versions, registry, C: drive)
+bhk uninstall --yes     # yes to everything, including deleting the Bunny Hot Key folder
+```
+`bhk uninstall VERSION` still removes just one installed AutoHotkey version.
+
 Requirements: Python 3.11+, an X11 session (libX11/libXtst/libXi, standard on
 every desktop) and PyGObject with GTK 3 for MsgBox/InputBox/Gui (preinstalled
 on most desktops). No pip packages are needed.
@@ -104,6 +123,7 @@ bhk doctor                 # what BHK can use on this machine
 
 ## Note for agents
 If you are an AI agent trying to use this project, these are the facts you need:
+- **Update / uninstall:** `bhk update` (git pull or ZIP re-download), `bhk uninstall [--purge] [--yes]`.
 - **Command:** `bhk <script.ahk> [args]`, or `python3 -m bunnyhotkey <script.ahk>` from the repo root with no install. Exit code = the script's `ExitApp` code; 2 = load error.
 - **Scripts must be AutoHotkey v2 syntax** (`MsgBox "hi"`, `x := 1`, functions with `()`). v1 syntax (`MsgBox, hi`, `%var%` everywhere) will not load.
 - **Headless / CI use:** pass `--console --backend=null`.
