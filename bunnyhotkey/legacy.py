@@ -1026,7 +1026,8 @@ class Translator:
             opts, trig, rest = hot[1], hot[2], hot[3]
             if rest and 'x' not in opts.lower():
                 return self.emit(t)
-            head = ':' + opts.replace('X', '').replace('x', '') + ':' + trig
+            # X: in v2 a hotstring that runs code on its own line needs the execute option
+            head = ':X' + opts.replace('X', '').replace('x', '') + ':' + trig
             label_key = ':' + opts + ':' + trig
         self.hot_count += 1
         lbl = f'__hk{self.hot_count}'

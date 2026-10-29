@@ -24,7 +24,7 @@ import time
 
 from .. import objects as O
 from ..objects import AhkArray, AhkObject, CLASSES, throw
-from ..values import UNSET
+from ..values import UNSET, to_bool
 from . import export
 
 VT_EMPTY, VT_I4, VT_BSTR, VT_DISPATCH, VT_BOOL, VT_VARIANT, VT_UI1, VT_ARRAY = 0, 3, 8, 9, 11, 12, 17, 0x2000
@@ -161,8 +161,17 @@ def _proto_setup():
     method(p, "Call", lambda this, *a: wrap(this.impl.call(this.impl.default or "Item", list(a))))
     prop(p, "Ptr", get=lambda this: _native_ptr(this))
     vp = cv.prototype
-    prop(vp, "Value", get=lambda this: getattr(this, "_value", ""),
-         set=lambda this, v: (setattr(this, "_value", v), v)[1]) if vp.own("Value") is None else None
+    # ComValue.Value; a ComObject inherits it, but its own Value member (Range.Value, Match.Value) wins
+    prop(vp, "Value", get=lambda this: wrap(this.impl.get("Value", [])) if hasattr(this, "impl")
+         else getattr(this, "_value", ""),
+         set=lambda this, v: this.impl.set("Value", [], v) if hasattr(this, "impl")
+         else (setattr(this, "_value", v), v)[1]) if vp.own("Value") is None else None
+    if vp.own("Ptr") is None:
+        # VT_UNKNOWN / VT_DISPATCH wrappers (e.g. from ComObjQuery) expose the interface pointer
+        prop(vp, "Ptr", get=lambda this: this.val if isinstance(this, ComValueObj) and this.vt in (9, 13)
+             else _no_prop(this, "Ptr"))
+        # ComValueRef: r[] reads / r[] := v writes the referenced value
+        prop(vp, "__Item", get=lambda this: _ref_get(this), set=lambda this, v: _ref_set(this, v))
     ap = ca.prototype
     if ap.own("MaxIndex") is None:
         method(ap, "MaxIndex", lambda this, dim=1: len(this.items) - 1)
@@ -171,6 +180,53 @@ def _proto_setup():
         prop(ap, "__Item", get=lambda this, i: this.items[_index(this, i)],
              set=lambda this, v, i: this.items.__setitem__(_index(this, i), v))
         method(ap, "__Enum", lambda this, n=1: _enumerator(iter(this.items), n))
+
+
+def _no_prop(obj, name):
+    throw("PropertyError", f'This value of type "{type(obj).__name__ if not isinstance(obj, AhkObject) else "ComValue"}" '
+                           f'has no property named "{name}".', name)
+
+
+_REF_FMT = {2: "h", 3: "i", 4: "f", 5: "d", 11: "h", 16: "b", 17: "B", 18: "H", 19: "I", 20: "q", 21: "Q", 22: "i", 23: "I"}
+
+
+def _ref_target(this):
+    if not isinstance(this, ComValueObj) or not this.vt & 0x4000:
+        _no_prop(this, "__Item")
+    from .buffer import resolve
+    data, idx = resolve(rt().to_int(this.val))
+    return this.vt & 0xFFF, data, idx
+
+
+def _ref_get(this):
+    import struct
+    vt, data, idx = _ref_target(this)
+    if vt == 12:                                   # VARIANT: vt at +0, value at +8
+        vt = struct.unpack_from("H", data, idx)[0]
+        idx += 8
+        if vt == 0:
+            return ""
+    fmt = _REF_FMT.get(vt)
+    if fmt is None:
+        com_error(0x80020005, "Type mismatch.")
+    v = struct.unpack_from(fmt, data, idx)[0]
+    return -1 if vt == 11 and v else v
+
+
+def _ref_set(this, v):
+    import struct
+    vt, data, idx = _ref_target(this)
+    if vt == 12:
+        n = rt().to_num(v)
+        vt = 5 if type(n) is float else 20
+        struct.pack_into("H", data, idx, vt)
+        idx += 8
+    fmt = _REF_FMT.get(vt)
+    if fmt is None:
+        com_error(0x80020005, "Type mismatch.")
+    n = rt().to_num(v)
+    struct.pack_into(fmt, data, idx, float(n) if fmt in "fd" else int(n))
+    return v
 
 
 def _native_ptr(obj):
@@ -224,6 +280,146 @@ def _bytes_of(v):
     if isinstance(v, bytes):
         return v
     return S(v).encode("utf-8")
+
+
+# ---------------------------------------------------------------- WScript.Network
+class WshNetwork(Impl):
+    progid = "WScript.Network"
+    iface = "IWshNetwork2"
+
+    def p_computername(self):
+        import socket
+        return socket.gethostname().split(".")[0].upper()
+
+    def p_username(self):
+        import getpass
+        return getpass.getuser()
+
+    def p_userdomain(self):
+        return self.p_computername()
+
+
+# ---------------------------------------------------------------- VBScript.RegExp
+def _vb_pattern(pat, ignore, multi):
+    flags = (re.I if ignore else 0) | (re.M if multi else 0)
+    try:
+        return re.compile(S(pat), flags)
+    except re.error as e:
+        com_error(0x800A1399, f"Syntax error in regular expression: {e}")
+
+
+class VBRegExp(Impl):
+    """VBScript.RegExp (vbscript.dll): JavaScript-flavoured patterns, Test/Execute/Replace."""
+    progid = "VBScript.RegExp"
+    iface = "IRegExp2"
+
+    def __init__(self):
+        self.pattern, self.glob, self.ignore, self.multi = "", False, False, False
+
+    def p_pattern(self):
+        return self.pattern
+
+    def s_pattern(self, v):
+        self.pattern = S(v)
+
+    def p_global(self):
+        return -1 if self.glob else 0
+
+    def s_global(self, v):
+        self.glob = to_bool(v)
+
+    def p_ignorecase(self):
+        return -1 if self.ignore else 0
+
+    def s_ignorecase(self, v):
+        self.ignore = to_bool(v)
+
+    def p_multiline(self):
+        return -1 if self.multi else 0
+
+    def s_multiline(self, v):
+        self.multi = to_bool(v)
+
+    def _rx(self):
+        return _vb_pattern(self.pattern, self.ignore, self.multi)
+
+    def m_test(self, text):
+        return -1 if self._rx().search(S(text)) else 0
+
+    def m_execute(self, text):
+        rx, t = self._rx(), S(text)
+        ms = list(rx.finditer(t)) if self.glob else [m for m in [rx.search(t)] if m]
+        return VBCollection([VBMatch(m) for m in ms])
+
+    def m_replace(self, text, repl):
+        r = S(repl)
+
+        def expand(m):
+            out, i = [], 0
+            while i < len(r):
+                c = r[i]
+                if c == "$" and i + 1 < len(r):
+                    nx = r[i + 1]
+                    if nx == "$":
+                        out.append("$"); i += 2; continue
+                    if nx == "&":
+                        out.append(m.group(0)); i += 2; continue
+                    if nx == "`":
+                        out.append(m.string[:m.start()]); i += 2; continue
+                    if nx == "'":
+                        out.append(m.string[m.end():]); i += 2; continue
+                    if nx.isdigit():
+                        j = i + 2 if i + 2 < len(r) and r[i + 2].isdigit() and int(r[i + 1:i + 3]) <= rx.groups else i + 1
+                        n = int(r[i + 1:j + 1]) if j > i + 1 else int(nx)
+                        if 0 < n <= rx.groups:
+                            out.append(m.group(n) or ""); i = (j + 1) if j > i + 1 else i + 2; continue
+                out.append(c)
+                i += 1
+            return "".join(out)
+        rx = self._rx()
+        return rx.sub(expand, S(text), count=0 if self.glob else 1)
+
+
+class VBCollection(Impl):
+    iface = "IMatchCollection2"
+    default = "Item"
+
+    def __init__(self, items):
+        self.items = items
+
+    def p_count(self):
+        return len(self.items)
+
+    def m_item(self, i):
+        i = rt().to_int(i)
+        if not 0 <= i < len(self.items):
+            com_error(0x800A0005, "Invalid procedure call or argument")
+        return self.items[i]
+
+    p_item = m_item
+
+    def enum(self):
+        return iter(self.items)
+
+
+class VBMatch(Impl):
+    iface = "IMatch2"
+    default = "Value"
+
+    def __init__(self, m):
+        self.m = m
+
+    def p_value(self):
+        return self.m.group(0)
+
+    def p_firstindex(self):
+        return self.m.start()
+
+    def p_length(self):
+        return self.m.end() - self.m.start()
+
+    def p_submatches(self):
+        return VBCollection([g if g is not None else "" for g in self.m.groups()])
 
 
 # ---------------------------------------------------------------- HTTP: WinHttpRequest and XMLHTTP
@@ -1752,7 +1948,7 @@ PROGIDS = {"winhttp.winhttprequest.5.1": lambda: WinHttpRequest(),
            "msxml2.serverxmlhttp.6.0": lambda: WinHttpRequest(xml=True),
            "scripting.dictionary": Dictionary, "wscript.shell": WshShell,
            "scripting.filesystemobject": FileSystemObject, "adodb.stream": AdodbStream, "sapi.spvoice": SpVoice,
-           "shell.application": ShellApplication,
+           "shell.application": ShellApplication, "wscript.network": WshNetwork, "vbscript.regexp": VBRegExp,
            # CLSIDs scripts sometimes use instead of ProgIDs
            "{2087c2f4-2cef-4953-a8ab-66779b670495}": lambda: WinHttpRequest(),
            "{ee09b103-97e0-11cf-978f-00a02463e06f}": Dictionary,

@@ -130,7 +130,7 @@ def _read(rt, args):
 
 
 class FileInfo:
-    __slots__ = ("path", "name", "dir", "is_dir", "pattern_dir", "st")
+    __slots__ = ("path", "name", "dir", "is_dir", "pattern_dir", "st", "sep")
 
     def __init__(self, path, name, pattern_dir, is_dir):
         self.path = path
@@ -159,7 +159,9 @@ def _files(rt, args):
             base_dir = os.getcwd()
         if pat == "":
             pat = "*"
-        orig_dir = os.path.dirname(pattern)
+        cut = max(pattern.rfind("/"), pattern.rfind("\\"))
+        orig_dir = pattern[:cut] if cut >= 0 else ""      # the directory as the script wrote it (\ or /)
+        sep = "\\" if "\\" in pattern else "/"
         idx = 0
         pat_l = pat.lower().replace("*.*", "*")
 
@@ -183,7 +185,9 @@ def _files(rt, args):
         for info in walk(base_dir, ""):
             idx += 1
             li.index = idx
-            info.pattern_dir = os.path.join(orig_dir, info.pattern_dir) if info.pattern_dir else orig_dir
+            sub = info.pattern_dir.replace("/", sep)
+            info.pattern_dir = (orig_dir + sep + sub if orig_dir else sub) if sub else orig_dir
+            info.sep = sep
             li.file = info
             yield idx
     return iterate

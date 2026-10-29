@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="728" viewBox="0 0 920 728" font-family="Segoe UI, Helvetica, Arial, sans-serif">
 <rect width="920" height="728" rx="12" fill="#ffffff" stroke="#d0d7de"/>
 <text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">Bunny Hot Key - parity with AutoHotkey v2 and v1</text>
-<text x="20" y="56" font-size="12.5" fill="#59636e">Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md</text>
+<text x="20" y="56" font-size="12.5" fill="#59636e">Pass rates of run tests (tests/conformance; built-ins: share called by a passing test). Details: docs/PARITY.md</text>
 <text x="20" y="89" font-size="13" fill="#1f2328">Language syntax &amp; semantics (v2.0)</text>
 <rect x="300" y="77" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="77" width="326.7" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="89" font-size="13" font-weight="700" fill="#2da44e">99%</text>
-<text x="685" y="89" font-size="11.5" fill="#59636e">all v2.0 constructs; regression suite</text>
+<rect x="300" y="77" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="89" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="89" font-size="11.5" fill="#59636e">58 of 58 checks (v2 language suite)</text>
 <text x="20" y="119" font-size="13" fill="#1f2328">Real-world v2 scripts that load</text>
 <rect x="300" y="107" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="107" width="326.7" height="16" rx="4" fill="#2da44e"/>
@@ -16,61 +16,61 @@
 <rect x="300" y="137" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="137" width="330.0" height="16" rx="4" fill="#2da44e"/>
 <text x="640" y="149" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="149" font-size="11.5" fill="#59636e">45 of 45 functions</text>
+<text x="685" y="149" font-size="11.5" fill="#59636e">45 of 45 functions run-tested</text>
 <text x="20" y="179" font-size="13" fill="#1f2328">Keyboard &amp; mouse functions</text>
 <rect x="300" y="167" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="167" width="330.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="179" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="179" font-size="11.5" fill="#59636e">Send, Click, Hotkey(), InputHook...</text>
+<rect x="300" y="167" width="320.1" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="179" font-size="13" font-weight="700" fill="#2da44e">97%</text>
+<text x="685" y="179" font-size="11.5" fill="#59636e">33 of 34 functions run-tested</text>
 <text x="20" y="209" font-size="13" fill="#1f2328">Process / Run / System</text>
 <rect x="300" y="197" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="197" width="330.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="209" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="209" font-size="11.5" fill="#59636e">Run, Process*, Env*, Sound*, Reg*, monitors</text>
+<rect x="300" y="197" width="320.1" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="209" font-size="13" font-weight="700" fill="#2da44e">97%</text>
+<text x="685" y="209" font-size="11.5" fill="#59636e">38 of 39 functions run-tested</text>
 <text x="20" y="239" font-size="13" fill="#1f2328">Files / Dirs / INI</text>
 <rect x="300" y="227" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="227" width="330.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="239" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="239" font-size="11.5" fill="#59636e">Drive* read real mount metadata</text>
+<rect x="300" y="227" width="283.8" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="239" font-size="13" font-weight="700" fill="#d4a72c">86%</text>
+<text x="685" y="239" font-size="11.5" fill="#59636e">38 of 44 functions run-tested</text>
 <text x="20" y="269" font-size="13" fill="#1f2328">Window functions (Win*)</text>
 <rect x="300" y="257" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="257" width="330.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="269" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="269" font-size="11.5" fill="#59636e">EWMH + X Shape (regions, TransColor)</text>
+<rect x="300" y="257" width="316.8" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="269" font-size="13" font-weight="700" fill="#2da44e">96%</text>
+<text x="685" y="269" font-size="11.5" fill="#59636e">50 of 52 functions run-tested</text>
 <text x="20" y="299" font-size="13" fill="#1f2328">Tray icon &amp; menu</text>
 <rect x="300" y="287" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="287" width="326.7" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="299" font-size="13" font-weight="700" fill="#2da44e">99%</text>
-<text x="685" y="299" font-size="11.5" fill="#59636e">AHK_NOTIFYICON clicks, balloons</text>
+<rect x="300" y="287" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="299" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="299" font-size="11.5" fill="#59636e">8 of 8 checks, icon clicked in the panel</text>
 <text x="20" y="329" font-size="13" fill="#1f2328">Hotkeys &amp; hotstrings (X11)</text>
 <rect x="300" y="317" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="317" width="326.7" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="329" font-size="13" font-weight="700" fill="#2da44e">99%</text>
-<text x="685" y="329" font-size="11.5" fill="#59636e">SendLevel rules, bare modifiers, end keys</text>
+<rect x="300" y="317" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="329" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="329" font-size="11.5" fill="#59636e">25 of 25 checks with real X11 input</text>
 <text x="20" y="359" font-size="13" fill="#1f2328">All built-in functions</text>
 <rect x="300" y="347" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="347" width="330.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="359" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="359" font-size="11.5" fill="#59636e">343 full, 1 partial, 0 missing</text>
+<rect x="300" y="347" width="320.1" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="359" font-size="13" font-weight="700" fill="#2da44e">97%</text>
+<text x="685" y="359" font-size="11.5" fill="#59636e">332 of 344 called by a passing test</text>
 <text x="20" y="389" font-size="13" fill="#1f2328">Gui</text>
 <rect x="300" y="377" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="377" width="323.4" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="389" font-size="13" font-weight="700" fill="#2da44e">98%</text>
-<text x="685" y="389" font-size="11.5" fill="#59636e">23 of 23 control types</text>
+<rect x="300" y="377" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="389" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="389" font-size="11.5" fill="#59636e">39 of 39 checks (v2 Gui suite)</text>
 <text x="20" y="419" font-size="13" fill="#1f2328">Win32 controls (Control*, Edit*)</text>
 <rect x="300" y="407" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="407" width="316.8" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="419" font-size="13" font-weight="700" fill="#2da44e">96%</text>
-<text x="685" y="419" font-size="11.5" fill="#59636e">Win32 messages, OnNotify; AT-SPI apps</text>
+<rect x="300" y="407" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="419" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="419" font-size="11.5" fill="#59636e">22 of 22 checks on test windows</text>
 <text x="20" y="449" font-size="13" fill="#1f2328">COM / ActiveX</text>
 <rect x="300" y="437" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="437" width="247.5" height="16" rx="4" fill="#d4a72c"/>
-<text x="640" y="449" font-size="13" font-weight="700" fill="#d4a72c">75%</text>
-<text x="685" y="449" font-size="11.5" fill="#59636e">native vtables, ComCall, ROT</text>
+<rect x="300" y="437" width="264.0" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="449" font-size="13" font-weight="700" fill="#d4a72c">80%</text>
+<text x="685" y="449" font-size="11.5" fill="#59636e">20 of 25 checks incl. Windows' own servers</text>
 <text x="20" y="479" font-size="13" fill="#1f2328">Wayland input</text>
 <rect x="300" y="467" width="330" height="16" rx="4" fill="#eef1f4"/>
 <text x="640" y="479" font-size="13" font-weight="700" fill="#cf222e">0%</text>
-<text x="685" y="479" font-size="11.5" fill="#59636e">dropped for now</text>
+<text x="685" y="479" font-size="11.5" fill="#59636e">not supported (no backend to test)</text>
 <line x1="20" y1="498" x2="900" y2="498" stroke="#d0d7de"/>
 <text x="20" y="516" font-size="13.5" font-weight="700" fill="#1f2328">AutoHotkey v1 (compatibility frontend - docs/V1.md)</text>
 <text x="20" y="539" font-size="13" fill="#1f2328">v1 scripts in tests/v1 that load</text>
@@ -80,9 +80,9 @@
 <text x="685" y="539" font-size="11.5" fill="#59636e">6 of 6 hotkey scripts (game macros)</text>
 <text x="20" y="569" font-size="13" fill="#1f2328">v1 hotkey syntax &amp; #If directives</text>
 <rect x="300" y="557" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="557" width="313.5" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="569" font-size="13" font-weight="700" fill="#2da44e">95%</text>
-<text x="685" y="569" font-size="11.5" fill="#59636e">unbraced bodies, labels, remaps, #If*</text>
+<rect x="300" y="557" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="569" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="569" font-size="11.5" fill="#59636e">16 of 16 checks with real X11 input</text>
 <text x="20" y="599" font-size="13" fill="#1f2328">v1 commands (comma syntax)</text>
 <rect x="300" y="587" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="587" width="330.0" height="16" rx="4" fill="#2da44e"/>
@@ -92,12 +92,12 @@
 <rect x="300" y="617" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="617" width="330.0" height="16" rx="4" fill="#2da44e"/>
 <text x="640" y="629" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="629" font-size="11.5" fill="#59636e">188 of 188 checks (tests/v1conf)</text>
+<text x="685" y="629" font-size="11.5" fill="#59636e">188 of 188 checks (tests/conformance)</text>
 <text x="20" y="659" font-size="13" fill="#1f2328">v1 Gui (Gui, GuiControl, LV_/TV_/SB_)</text>
 <rect x="300" y="647" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="647" width="330.0" height="16" rx="4" fill="#2da44e"/>
 <text x="640" y="659" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="659" font-size="11.5" fill="#59636e">91 of 91 checks (tests/v1conf)</text>
+<text x="685" y="659" font-size="11.5" fill="#59636e">91 of 91 checks (tests/conformance)</text>
 <rect x="20" y="691" width="12" height="12" rx="3" fill="#2da44e"/>
 <text x="38" y="702" font-size="12" fill="#1f2328">90%+ complete</text>
 <rect x="210" y="691" width="12" height="12" rx="3" fill="#d4a72c"/>

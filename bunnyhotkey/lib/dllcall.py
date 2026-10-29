@@ -194,7 +194,20 @@ EMU = {
     "coinitialize": lambda p: 0, "couninitialize": lambda p: 0,
     "globalmemorystatusex": lambda p: 0,
     "getsystemtimeasfiletime": lambda p: (_write_out(p[0][1], "q", int((time.time() + 11644473600) * 10_000_000)), 0)[1],
+    "getmenuitemcount": lambda p: _menu_count(p),
 }
+
+
+def _menu_count(p):
+    """GetMenuItemCount on a Menu.Handle of this script (separators count as items); -1 for other handles."""
+    from .guiobj import MENUS
+    m = MENUS.get(I(p[0][1]))
+    if m is None:
+        for mm in MENUS.values():
+            if mm.mid == I(p[0][1]):
+                m = mm
+                break
+    return len(m.items) if m is not None else -1
 
 _CTYPES = {"int": ctypes.c_int, "uint": ctypes.c_uint, "int64": ctypes.c_int64, "uint64": ctypes.c_uint64,
            "short": ctypes.c_short, "ushort": ctypes.c_ushort, "char": ctypes.c_byte, "uchar": ctypes.c_ubyte,

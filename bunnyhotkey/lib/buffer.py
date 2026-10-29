@@ -76,6 +76,7 @@ def setup(rt, cls):
     method(p, "__New", lambda this, size=0, fill=UNSET: _new(this, size, fill))
     prop(p, "Ptr", get=lambda this: this.addr)
     prop(p, "Size", get=lambda this: len(this.data), set=lambda this, v: _resize(this, v))
+    method(CLASSES["ClipboardAll"].prototype, "__New", lambda this, data=UNSET, size=UNSET: _clip_new(this, data, size))
 
 
 def _new(this, size, fill):
@@ -139,9 +140,18 @@ def _enc(enc):
         return "utf-16-le", 2
     if e in ("UTF-8", "CP65001"):
         return "utf-8", 1
+    if e in ("CP0", "ANSI", ""):
+        return "cp1252", 1          # the system ANSI code page (GetACP) of a Western Windows install
     if e.startswith("CP"):
-        return "cp" + e[2:], 1
-    return e.lower(), 1
+        codec = "cp" + e[2:]
+    else:
+        codec = e.lower()
+    import codecs
+    try:
+        codecs.lookup(codec)
+    except LookupError:
+        throw("ValueError", "Invalid encoding.", e)
+    return codec, 1
 
 
 @export()
@@ -194,23 +204,41 @@ def VarSetStrCapacity(ref, cap=UNSET):
         throw("TypeError", "Expected a VarRef.", "VarSetStrCapacity")
     cur = ref.cell.value
     length = len(cur) if isinstance(cur, str) else 0
+    held = _STRCAP.get(id(ref.cell))
+    have = max(length, held[1]) if held is not None and held[0] is ref.cell else length
     if cap is UNSET or cap == "":
-        return length
+        return have
     n = O.RT.to_int(cap)
     if n == 0:
         ref.cell.value = ""
+        _STRCAP.pop(id(ref.cell), None)
         return 0
     if n < 0:
-        return length
+        return have
     if not isinstance(cur, str):
         ref.cell.value = ""
+    if len(_STRCAP) > 4096:
+        _STRCAP.clear()
+    _STRCAP[id(ref.cell)] = (ref.cell, max(n, length))
     return max(n, length)
 
 
-@export()
-def ClipboardAll(data=UNSET, size=UNSET):
-    from .clipboard import get_text
-    b = BufferObj(0, UNSET, CLASSES["ClipboardAll"].prototype)
-    t = get_text().encode("utf-16-le")
-    b.data = bytearray(t)
-    return b
+_STRCAP: dict = {}      # id(cell) -> (cell, capacity in characters) requested by VarSetStrCapacity
+
+
+def _clip_new(this, data, size):
+    """ClipboardAll(): the clipboard's contents (BHK keeps the text, as UTF-16); ClipboardAll(Data, Size)
+    takes saved contents from a Buffer-like object or an address."""
+    if data is UNSET:
+        from .clipboard import get_text
+        this.data = get_text().encode("utf-16-le")
+        return ""
+    if isinstance(data, BufferObj):
+        raw = bytes(data.data)
+    else:
+        buf, idx = resolve(data)
+        raw = bytes(buf[idx:])
+    if size is not UNSET and size != "":
+        raw = raw[:O.RT.to_int(size)]
+    this.data = raw
+    return ""

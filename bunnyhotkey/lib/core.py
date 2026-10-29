@@ -127,7 +127,12 @@ def IsSetRef(ref):
 
 @export()
 def IsLabel(name):
-    return int(rt().to_str(name).lower() in rt().label_table)
+    """Labels of the calling function, or of the global scope outside functions."""
+    r = rt()
+    key = r.to_str(name).lower()
+    cf = r.call_stack[-1] if r.call_stack else None
+    labels = getattr(cf, "label_names", None) if cf is not None else r.global_labels
+    return int(key in (labels or ()))
 
 
 # ---------------------------------------------------------------- conversions
@@ -283,14 +288,22 @@ def ObjOwnProps(obj):
     return obj_own_props(obj)
 
 
+_CAPACITY = __import__("weakref").WeakKeyDictionary()     # own-property capacity set by ObjSetCapacity
+
+
 @export()
 def ObjGetCapacity(obj):
-    return len(obj.props)
+    if not isinstance(obj, AhkObject):
+        throw("TypeError", type_error_msg("Object", obj))
+    return max(len(obj.props), _CAPACITY.get(obj, 0))
 
 
 @export()
 def ObjSetCapacity(obj, n):
-    return n
+    if not isinstance(obj, AhkObject):
+        throw("TypeError", type_error_msg("Object", obj))
+    _CAPACITY[obj] = max(rt().to_int(n), len(obj.props))    # never below the current property count
+    return ""
 
 
 @export()

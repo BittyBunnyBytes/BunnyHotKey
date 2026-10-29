@@ -47,9 +47,13 @@ def set_text(s: str):
     if _owner_proc is not None and _owner_proc.poll() is None:
         _owner_proc.kill()
     # a helper process owns the selection so the text survives after the script exits (like xclip)
-    _owner_proc = subprocess.Popen([sys.executable, "-I", "-m", "bunnyhotkey.xclip", "--own"],
-                                   stdin=subprocess.PIPE, cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                   start_new_session=True)
+    # -I keeps the script's folder and PYTHONPATH off sys.path, so BHK's own folder is added explicitly
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    boot = ("import sys, runpy; sys.path.insert(0, sys.argv.pop(1)); "
+            "runpy.run_module('bunnyhotkey.xclip', run_name='__main__', alter_sys=True)")
+    _owner_proc = subprocess.Popen([sys.executable, "-I", "-c", boot, root, "--own"],
+                                   stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   cwd=root, start_new_session=True)   # never hold the script's output pipe open
     _owner_proc.stdin.write(s.encode("utf-8"))
     _owner_proc.stdin.close()
     deadline = time.monotonic() + 1.0

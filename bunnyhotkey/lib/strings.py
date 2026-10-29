@@ -268,8 +268,16 @@ def StrPtr(s):
 
 @export()
 def VerCompare(a, b):
+    """VersionSatisfies(a, b, true) in util.cpp: b may start with <, >, <=, >= or = and then yields 0/1."""
     from .process import ver_compare
-    return ver_compare(S(a), S(b))
+    a, b = S(a), S(b)
+    m = re.match(r"(<?)(>?)(=?)", b)
+    lt, gt, eq = bool(m[1]), bool(m[2]), bool(m[3])
+    req = b[m.end():]
+    result = ver_compare(a.lstrip("v")[:] if a.startswith("v") else a, req[1:] if req.startswith("v") else req)
+    if not (lt or gt or eq):
+        return result
+    return int((lt, eq, gt)[result + 1])
 
 
 # ---------------------------------------------------------------- Sort
@@ -387,6 +395,8 @@ def _format_one(r, v, spec):
     if not m:
         return r.to_str(v)
     flags, width, prec, _len, typ = m.groups()
+    if not typ and _len.endswith("L"):
+        _len, typ = _len[:-1], "L"          # {:L} is the lowercase custom type, not a length modifier
     case = ""
     if typ in ("U", "L", "T"):
         case = typ

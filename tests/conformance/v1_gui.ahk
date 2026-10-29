@@ -1,3 +1,4 @@
+;; suite: v1 display
 ; AutoHotkey v1.1 Gui conformance (tools/v1_conformance.py). One feature per section.
 ; Expected output follows the v1.1 Gui, GuiControl, GuiControlGet, ListView, TreeView and StatusBar docs.
 ; Sections need a display (BHK's Gui is GTK); events are triggered without user input.

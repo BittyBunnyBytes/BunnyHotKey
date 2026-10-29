@@ -698,9 +698,26 @@ def gui_destroy(this):
     return ""
 
 
+def _frame(this):
+    """(left, right, top, bottom) window-manager frame of a mapped Gui window, else zeros."""
+    if not this.xid:
+        return (0, 0, 0, 0)
+    try:
+        from .window import _dpy, frame_extents
+        return frame_extents(_dpy(), this.xid)
+    except Exception:
+        return (0, 0, 0, 0)
+
+
 def gui_move(this, x=UNSET, y=UNSET, w=UNSET, h=UNSET):
+    """Gui.Move takes the outer window rectangle (title bar and borders included), like WinMove."""
     _live(this)
     kw = {k: rt().to_int(v) for k, v in (("x", x), ("y", y), ("w", w), ("h", h)) if v is not UNSET and v != ""}
+    l, r, t, b = _frame(this)
+    if "w" in kw:
+        kw["w"] = max(kw["w"] - l - r, 1)
+    if "h" in kw:
+        kw["h"] = max(kw["h"] - t - b, 1)
     _srv().call("wmove", win=this.wid, **kw)
     return ""
 
@@ -1224,6 +1241,12 @@ def _gui_enum(this, n):
 def _getpos(this, refs, client=False):
     from . import setref
     vals = _srv().call("getpos", win=this.wid, client=client)
+    if not client and this.xid:
+        try:                                    # the outer rectangle, as WinGetPos reports it
+            from .window import _dpy, geometry
+            vals = list(geometry(_dpy(), this.xid))
+        except Exception:
+            pass
     for ref, v in zip(refs, vals):
         setref(ref, v)
     return ""
@@ -1249,12 +1272,14 @@ def _ctrl_move(this, x, y, w, h):
 
 
 def tooltip(n, text, x, y):
+    """Show/hide ToolTip n; returns the tooltip window's HWND (0 when hidden).  X/Y follow CoordMode "ToolTip"."""
     from .input_ import backend
-    if x is UNSET or y is UNSET:
-        mx, my = backend().mouse_pos()
-        x = mx + 16 if x is UNSET else rt().to_int(x)
-        y = my + 16 if y is UNSET else rt().to_int(y)
-    _srv().call("tooltip", n=n, text=text, x=int(x), y=int(y))
+    from .window import _coord_origin
+    ox, oy = _coord_origin("ToolTip")
+    mx, my = backend().mouse_pos() if (x is UNSET or y is UNSET) else (0, 0)
+    x = mx + 16 if x is UNSET else rt().to_int(x) + ox
+    y = my + 16 if y is UNSET else rt().to_int(y) + oy
+    return _srv().call("tooltip", n=n, text=text, x=int(x), y=int(y)) or 0
 
 
 # ---------------------------------------------------------------- Menu (script_menu.cpp)

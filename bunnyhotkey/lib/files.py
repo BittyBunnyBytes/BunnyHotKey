@@ -463,15 +463,34 @@ def FileGetVersion(filename=UNSET):
 
 @export()
 def FileRecycle(pattern):
-    for m in _glob(host_path(S(pattern))):
-        import subprocess
-        if shutil.which("gio"):
-            subprocess.run(["gio", "trash", m])
-        else:
-            trash = os.path.join(shell_folder("localappdata"), "Trash", "files")
-            os.makedirs(trash, exist_ok=True)
-            shutil.move(m, trash)
+    import subprocess
+    matches = _glob(host_path(S(pattern)))
+    if not matches:
+        throw("OSError", "The system cannot find the file specified.", S(pattern))
+    for m in matches:
+        if shutil.which("gio") and subprocess.run(["gio", "trash", m], capture_output=True).returncode == 0:
+            continue
+        _home_trash(m)          # gio refuses some mounts (tmpfs, "system internal"); the home trash takes any file
     return ""
+
+
+def _home_trash(path):
+    """Move `path` into the freedesktop.org home trash ($XDG_DATA_HOME/Trash) with its .trashinfo record."""
+    import time
+    import urllib.parse
+    base = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "Trash")
+    files, info = os.path.join(base, "files"), os.path.join(base, "info")
+    os.makedirs(files, exist_ok=True)
+    os.makedirs(info, exist_ok=True)
+    name = os.path.basename(path.rstrip("/"))
+    stem, n = name, 1
+    while os.path.exists(os.path.join(files, name)) or os.path.exists(os.path.join(info, name + ".trashinfo")):
+        n += 1
+        name = f"{stem}.{n}"
+    with open(os.path.join(info, name + ".trashinfo"), "w", encoding="utf-8") as fh:
+        fh.write("[Trash Info]\nPath=" + urllib.parse.quote(os.path.abspath(path)) + "\nDeletionDate="
+                 + time.strftime("%Y-%m-%dT%H:%M:%S") + "\n")
+    shutil.move(path, os.path.join(files, name))
 
 
 @export()

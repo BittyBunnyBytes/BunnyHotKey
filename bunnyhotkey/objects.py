@@ -315,7 +315,12 @@ class BuiltinFunc(FuncBase):
         for i in range(min(self.minp, n)):
             if args[i] is UNSET:
                 throw("Error", "Missing a required parameter.", self.fname)
-        return self.fn(*args)
+        try:
+            return self.fn(*args)
+        except (LookupError, ValueError, TypeError, AttributeError, ArithmeticError, OSError) as ex:
+            # A Python-level failure inside a built-in becomes a catchable AutoHotkey error
+            # instead of ending the script thread.
+            throw("OSError" if isinstance(ex, OSError) else "Error", f"{type(ex).__name__}: {ex}", self.fname)
 
     def min_params(self):
         return self.minp

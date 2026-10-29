@@ -87,6 +87,9 @@ def translate_command(target: str) -> list[str]:
             return ["sh", "-c", " ".join(args[1:])]
         return [exe] + [host_path(a) if ("\\" in a or a[1:3] == ":\\") else a for a in args]
     hp = host_path(prog)
+    if _is_ahk_exe(hp, low):
+        import sys
+        return [sys.executable, "-m", "bunnyhotkey"] + args     # Run A_AhkPath ' "script.ahk"'
     if os.path.isdir(hp):
         return ["xdg-open", hp]
     if os.path.isfile(hp):
@@ -104,6 +107,16 @@ def translate_command(target: str) -> list[str]:
     if found:
         return [found] + args
     throw("OSError", "The system cannot find the file specified.", target)
+
+
+def _is_ahk_exe(hp, low):
+    """A_AhkPath (BHK's own entry point) or an AutoHotkey executable named by a script."""
+    main = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "__main__.py")
+    if os.path.exists(hp) and os.path.realpath(hp) == os.path.realpath(main):
+        return True
+    base = os.path.basename(low.replace("\\", "/"))
+    return base in ("autohotkey.exe", "autohotkey64.exe", "autohotkey32.exe", "autohotkeyu64.exe",
+                    "autohotkeyu32.exe") and not os.path.isfile(hp)
 
 
 def _verb(target):
@@ -251,13 +264,34 @@ def RunWait(target, workdir="", options="", outpid=UNSET):
     return p.returncode
 
 
+def _reap():
+    """Collect exited children started by Run so they don't linger as zombies."""
+    for pid, p in list(_CHILDREN.items()):
+        try:
+            if p.poll() is not None:
+                del _CHILDREN[pid]
+        except Exception:
+            del _CHILDREN[pid]
+
+
+def _alive(pid):
+    """A process exists unless it is gone or only a zombie (exited, not yet reaped by its parent)."""
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            st = fh.read()
+    except OSError:
+        return False
+    return st[st.rfind(")") + 2:][:1] not in ("Z", "X")
+
+
 def _pid_of(name_or_pid):
     s = S(name_or_pid) if name_or_pid not in (UNSET, "") else ""
     if s == "":
         return 0
+    _reap()
     if s.isdigit():
         pid = int(s)
-        return pid if os.path.exists(f"/proc/{pid}") else 0
+        return pid if _alive(pid) else 0
     low = s.lower()
     low_noext = low[:-4] if low.endswith(".exe") else low
     for d in os.listdir("/proc"):
@@ -266,10 +300,10 @@ def _pid_of(name_or_pid):
         try:
             with open(f"/proc/{d}/comm") as fh:
                 comm = fh.read().strip().lower()
-            if comm == low or comm == low_noext:
+            if (comm == low or comm == low_noext) and _alive(d):
                 return int(d)
             exe = os.path.basename(os.readlink(f"/proc/{d}/exe")).lower()
-            if exe == low or exe == low_noext:
+            if (exe == low or exe == low_noext) and _alive(d):
                 return int(d)
         except OSError:
             continue

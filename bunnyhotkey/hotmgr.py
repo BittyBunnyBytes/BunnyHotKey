@@ -113,6 +113,9 @@ class HotManager:
             self._apply_opts(v, options)
         if self.rt.backend is not None:
             self.rt.backend.refresh()
+        elif getattr(self.rt, "auto_exec_started", True):
+            from .backends import get_backend
+            get_backend(self.rt).refresh()       # Hotkey() at run time starts the hook
         return hk, v
 
     def _apply_opts(self, v, options):
@@ -329,10 +332,10 @@ class HotstringEngine:
                 do_send(text, mode=h.send_mode, raw=True)
             else:
                 do_send(text, mode=h.send_mode)
-            if end_char and not h.omit:
+            if end_char and not h.omit and (suppressed or h.backspace):
+                # re-send the end char only if it was swallowed or backspaced over; with B0 it already
+                # reached the window (hook.cpp suppresses it only for B, or O with an end char)
                 do_send(end_char, mode=h.send_mode, text=True)
-            elif not h.backspace and not end_char and suppressed:
-                pass
         rt.post(run, priority=h.priority, kind="hotstring", tag=name)
 
 

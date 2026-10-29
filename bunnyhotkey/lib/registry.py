@@ -14,8 +14,8 @@ from . import export
 ROOTS = {"HKEY_LOCAL_MACHINE": "HKLM", "HKLM": "HKLM", "HKEY_CURRENT_USER": "HKCU", "HKCU": "HKCU",
          "HKEY_CLASSES_ROOT": "HKCR", "HKCR": "HKCR", "HKEY_USERS": "HKU", "HKU": "HKU",
          "HKEY_CURRENT_CONFIG": "HKCC", "HKCC": "HKCC"}
-_lock = threading.Lock()
 _data = None
+_stamp = None           # (mtime_ns, size) of registry.json when _data was read
 
 
 def _path():
@@ -23,9 +23,57 @@ def _path():
     return os.path.join(prefix_root(), "registry.json")
 
 
+def _file_stamp():
+    try:
+        st = os.stat(_path())
+        return st.st_mtime_ns, st.st_size
+    except OSError:
+        return None
+
+
+class _RegLock:
+    """One registry shared by every BHK process, as on Windows: an exclusive file lock around each
+    operation, and the data re-read whenever another process changed it."""
+
+    def __init__(self):
+        self._thread = threading.RLock()
+        self._fh = None
+        self._depth = 0
+
+    def __enter__(self):
+        global _data
+        self._thread.acquire()
+        self._depth += 1
+        if self._depth == 1:
+            import fcntl
+            try:
+                os.makedirs(os.path.dirname(_path()), exist_ok=True)
+                self._fh = open(_path() + ".lock", "a")
+                fcntl.flock(self._fh, fcntl.LOCK_EX)
+            except OSError:
+                self._fh = None
+            if _data is not None and _file_stamp() != _stamp:
+                _data = None
+        return self
+
+    def __exit__(self, *exc):
+        self._depth -= 1
+        if self._depth == 0 and self._fh is not None:
+            import fcntl
+            fcntl.flock(self._fh, fcntl.LOCK_UN)
+            self._fh.close()
+            self._fh = None
+        self._thread.release()
+        return False
+
+
+_lock = _RegLock()
+
+
 def _load():
-    global _data
+    global _data, _stamp
     if _data is None:
+        _stamp = _file_stamp()
         try:
             with open(_path()) as fh:
                 _data = json.load(fh)
@@ -35,10 +83,12 @@ def _load():
 
 
 def _save():
-    tmp = _path() + ".tmp"
+    global _stamp
+    tmp = _path() + ".tmp.%d" % os.getpid()
     with open(tmp, "w") as fh:
         json.dump(_data, fh, indent=1, sort_keys=True)
     os.replace(tmp, _path())
+    _stamp = _file_stamp()
 
 
 def _split(key: str):
@@ -163,20 +213,19 @@ def RegCreateKey(key=UNSET):
 
 
 def loop_items(key, mode):
+    """PerformLoopReg: values first, then subkeys, each in reverse order; R recurses into every subkey."""
     with _lock:
         node = _node(key)
     if node is None:
         return
-    root, rest = _split(key)
     full = key.rstrip("\\")
-    if "K" in mode:
-        for name, sub in sorted(node.get("keys", {}).items(), key=lambda x: x[0].lower(), reverse=True):
-            yield {"Name": name, "Type": "KEY", "Key": full, "TimeModified": sub.get("time", "")}
-            if "R" in mode:
-                yield from loop_items(full + "\\" + name, mode)
-    if "V" in mode or "K" not in mode:
+    want_keys = "K" in mode
+    want_values = "V" in mode or not want_keys
+    if want_values:
         for name, (t, v) in sorted(node.get("values", {}).items(), key=lambda x: x[0].lower(), reverse=True):
             yield {"Name": name, "Type": t, "Key": full, "TimeModified": node.get("time", "")}
-    if "R" in mode and "K" not in mode:
-        for name in node.get("keys", {}):
+    for name, sub in sorted(node.get("keys", {}).items(), key=lambda x: x[0].lower(), reverse=True):
+        if want_keys:
+            yield {"Name": name, "Type": "KEY", "Key": full, "TimeModified": sub.get("time", "")}
+        if "R" in mode:
             yield from loop_items(full + "\\" + name, mode)

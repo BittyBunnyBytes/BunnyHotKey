@@ -1,8 +1,11 @@
 """Recreate the parity visual: python3 tools/parity_chart.py
 
-1. Measures every AutoHotkey built-in (tools/ahk_builtins.txt) against BHK's implementation.
-   Measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, and tests/v1/*.ahk loading.
-2. Reads docs/parity.json (areas, notes, hand-scored percentages, the "missing" list).
+1. Runs the conformance suites (tests/conformance, tools/conformance.py): each area's percentage is the
+   pass rate of its suite, and each built-in group's is the share of its functions (tools/ahk_builtins.txt)
+   that a passing run test calls - a passing conformance section or a regression script (tests/scripts).
+   Desktop suites drive the real X11 session (synthetic input, test windows, the tray).
+   Also measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, and tests/v1 loading.
+2. Reads docs/parity.json (areas, notes, the "missing" list).
 3. Writes assets/parity.svg and refreshes the generated blocks in README.md and docs/PARITY.md
    (between <!-- parity:...:start --> and <!-- parity:...:end --> markers).
 
@@ -72,8 +75,66 @@ def classify():
     return result
 
 
+_RESULTS = {}
+
+
+def suite_results(name):
+    """[(section, passed)] of one conformance suite, run once per chart build."""
+    if name not in _RESULTS:
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import conformance
+        print(f"running conformance suite {name} ...", flush=True)
+        _RESULTS[name] = conformance.run(name, details=True)
+    return _RESULTS[name]
+
+
+def _strip_comments(code):
+    return "\n".join(re.sub(r"(^|\s);.*$", "", line) for line in code.split("\n"))
+
+
+def run_tested():
+    """Lower-case names of the built-ins that some passing run test calls."""
+    if "_covered" in _RESULTS:
+        return _RESULTS["_covered"]
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import conformance
+    texts = []
+    for suite in conformance.suites():
+        meta, _ = conformance.load(suite)
+        if meta["version"] != "2":
+            continue
+        ok_sections = [t for t, ok in suite_results(suite) if ok]
+        texts.append(meta["prelude"])
+        texts.extend("".join(t["code"]) for t in ok_sections)
+    for f in sorted(os.listdir(os.path.join(ROOT, "tests", "scripts"))):
+        if f.endswith(".ahk") and not f.startswith("v1_"):          # v2 regression scripts (tests/run.py)
+            texts.append(open(os.path.join(ROOT, "tests", "scripts", f), encoding="utf-8").read())
+    src = _strip_comments("\n".join(texts))
+    names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_builtins.txt")) if l.strip() and not l.startswith("#")]
+    covered = set()
+    for n in names:
+        if re.search(r"(?<![\w.])" + re.escape(n) + r"\s*\(", src, re.I) or \
+                re.search(r"(?im)^\s*" + re.escape(n) + r"(?:[ \t,]|$)", src):
+            covered.add(n.lower())
+    _RESULTS["_covered"] = covered
+    return covered
+
+
 def measure(spec, cls, data):
     kind, _, group = spec.partition(":")
+    if kind == "suite":
+        res = suite_results(group)
+        ok = sum(1 for _, passed in res if passed)
+        return (round(100 * ok / len(res)) if res else 0), {"passed": ok, "count": len(res)}
+    if kind == "runtested":
+        names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_builtins.txt"))
+                 if l.strip() and not l.startswith("#")]
+        pred = GROUPS[group]
+        mine = [n for n in names if pred(n)]
+        cov = run_tested()
+        hit = sum(1 for n in mine if n.lower() in cov)
+        return (round(100 * hit / len(mine)) if mine else 0), {"covered": hit, "count": len(mine),
+                                                              "untested": len(mine) - hit}
     if kind == "corpus":
         c = data["corpus"]
         return round(100 * c["loaded"] / c["total"]), dict(c)
@@ -87,17 +148,14 @@ def measure(spec, cls, data):
 
 
 def measure_v1(what):
+    if what in ("language", "gui", "hotkeys"):
+        return measure("suite:v1_" + what, None, None)
     if what == "scripts":
         d = os.path.join(ROOT, "tests", "v1")
         files = sorted(f for f in os.listdir(d) if f.endswith(".ahk"))
         ok = sum(subprocess.run([sys.executable, "-m", "bunnyhotkey", "--console", "--backend=null", "--validate",
                                  os.path.join(d, f)], cwd=ROOT, capture_output=True).returncode == 0 for f in files)
         return (round(100 * ok / len(files)) if files else 0), {"loaded": ok, "total": len(files)}
-    if what in ("language", "gui"):
-        sys.path.insert(0, os.path.join(ROOT, "tools"))
-        import v1_conformance
-        ok, n = v1_conformance.run(what)
-        return (round(100 * ok / n) if n else 0), {"passed": ok, "count": n}
     from bunnyhotkey.legacy import COMMANDS
     names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_v1_commands.txt")) if l.strip() and not l.startswith("#")]
     supported = set(COMMANDS) | {"mousegetpos"}
@@ -175,12 +233,12 @@ def main():
             rows.append((a["area"], pct, a.get("note", "").format(**vals)))
     with open(os.path.join(ROOT, "assets", "parity.svg"), "w", encoding="utf-8") as fh:
         fh.write(render(data, rows))
-    _, allv = measure("builtins:all", cls, data)
+    _, allv = measure("runtested:all", cls, data)
     lang = values.get("Language syntax & semantics (v2.0)", 0)
     api = values.get("All built-in functions", 0)
-    summary = (f"**In short:** the AutoHotkey v2 *language* is essentially complete ({lang}%), and\n"
-               f"**{api}% of its built-in function API** is reproduced ({allv['full']} full, {allv['partial']} partial, "
-               f"{allv['missing']} missing).\n"
+    summary = (f"**In short:** every percentage is a pass rate of run tests (`tests/conformance`, real scripts "
+               f"compared with AutoHotkey's documented results). The v2 *language* suite passes {lang}%, and "
+               f"**{allv['covered']} of {allv['count']} built-in functions ({api}%)** are called by a passing run test.\n"
                + (f"**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - "
                   + ", ".join(f"{a['area'].split(' (')[0].replace('v1 ', '', 1)} {values.get(a['area'], 0)}%"
                               for a in data["v1"]["areas"][1:])
@@ -189,10 +247,12 @@ def main():
                + "\n".join(f"- {m}" for m in data["missing"])
                + "\n\nThe full breakdown is in [docs/PARITY.md](docs/PARITY.md).")
     replace_block("README.md", "summary", summary)
+    untested = sorted(n for n in (l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_builtins.txt"))
+                                   if l.strip() and not l.startswith("#")) if n.lower() not in run_tested())
     replace_block("docs/PARITY.md", "counts",
-                  f"Result: **{allv['full']} full, {allv['partial']} partial, {allv['missing']} missing ({api}%)** "
-                  f"of {allv['count']} built-ins.")
-    print(f"assets/parity.svg updated: built-ins {allv['full']}/{allv['partial']}/{allv['missing']} of {allv['count']} ({api}%)")
+                  f"Result: **{allv['covered']} of {allv['count']} built-ins ({api}%)** are called by a passing run "
+                  f"test.\n  Not run-tested yet: " + (", ".join(f"`{n}`" for n in untested) or "none") + ".")
+    print(f"assets/parity.svg updated: built-ins run-tested {allv['covered']} of {allv['count']} ({api}%)")
 
 
 if __name__ == "__main__":

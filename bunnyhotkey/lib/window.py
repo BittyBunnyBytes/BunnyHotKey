@@ -612,7 +612,16 @@ def WinGetStyle(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 def WinGetExStyle(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     d = _dpy()
     w = _win_arg(t, txt, xt, xx)
-    return 0x8 if d.atom("_NET_WM_STATE_ABOVE") in d.get_longs(w, "_NET_WM_STATE") else 0
+    st = d.get_longs(w, "_NET_WM_STATE")
+    v = _EXSTYLE.get(w, 0) & ~(0x8 | 0x80)
+    if d.atom("_NET_WM_STATE_ABOVE") in st:
+        v |= 0x8                    # WS_EX_TOPMOST
+    if d.atom("_NET_WM_STATE_SKIP_TASKBAR") in st:
+        v |= 0x80                   # WS_EX_TOOLWINDOW (no taskbar button)
+    return v
+
+
+_EXSTYLE: dict[int, int] = {}       # extended-style bits with no X11 equivalent, kept per window
 
 
 def _gui_texts(win, hidden=None):
@@ -697,7 +706,7 @@ def WinGetTransparent(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     d = _dpy()
     w = _win_arg(t, txt, xt, xx)
     v = d.get_longs(w, "_NET_WM_WINDOW_OPACITY")
-    return "" if not v else int(v[0]) * 255 // 0xFFFFFFFF
+    return "" if not v else (int(v[0]) & 0xFFFFFFFF) * 255 // 0xFFFFFFFF   # a CARDINAL comes back sign-extended
 
 
 @export()
@@ -709,6 +718,14 @@ def WinGetTransColor(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 def WinMove(x=UNSET, y=UNSET, w=UNSET, h=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     d = _dpy()
     win = _win_arg(t, txt, xt, xx)
+    from .guiobj import gui_for_window, gui_move
+    g = gui_for_window(win)
+    if g is not None:
+        # this script's own Gui: its toolkit window may refuse a WM resize (not +Resize), but
+        # SetWindowPos always moves and sizes a window
+        gui_move(g, x, y, w, h)
+        _delay()
+        return ""
     gx, gy, gw, gh = geometry(d, win)
     l, r_, tp, b = frame_extents(d, win)
     r = rt()
@@ -805,6 +822,10 @@ def WinShow(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 def WinSetTitle(newtitle, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     d = _dpy()
     win = _win_arg(t, txt, xt, xx)
+    from .guiobj import gui_for_window
+    g = gui_for_window(win)
+    if g is not None:
+        g.title = S(newtitle)          # keep Gui.Title in step, as GetWindowText would
     data = S(newtitle).encode()
     d.x.XChangeProperty(d.dpy, win, d.atom("_NET_WM_NAME"), d.atom("UTF8_STRING"), 8, 0, data, len(data))
     d.x.XStoreName(d.dpy, win, data)
@@ -1038,9 +1059,21 @@ def WinSetStyle(v, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 
 @export()
 def WinSetExStyle(v, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    s = S(v)
-    if s in ("^0x8", "+0x8", "-0x8", "0x8"):
-        WinSetAlwaysOnTop(-1 if s.startswith("^") else 0 if s.startswith("-") else 1, t, txt, xt, xx)
+    """+N adds, -N removes, ^N toggles, N replaces; TOPMOST and TOOLWINDOW map to EWMH states."""
+    d = _dpy()
+    win = _win_arg(t, txt, xt, xx)
+    s = S(v).strip()
+    op = s[0] if s[:1] in "+-^" else ""
+    n = rt().to_int(s[1:] if op else s)
+    cur = WinGetExStyle("ahk_id " + str(win))
+    new = cur | n if op == "+" else cur & ~n if op == "-" else cur ^ n if op == "^" else n
+    if (new ^ cur) & 0x8:
+        WinSetAlwaysOnTop(1 if new & 0x8 else 0, "ahk_id " + str(win))
+    if (new ^ cur) & 0x80:
+        _client_msg(d, win, "_NET_WM_STATE", [1 if new & 0x80 else 0, d.atom("_NET_WM_STATE_SKIP_TASKBAR"), 0, 1, 0])
+        d.flush()
+    _EXSTYLE[win] = new
+    _delay()
     return ""
 
 
@@ -1221,7 +1254,7 @@ def ControlSendText(keys, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET)
 def ControlClick(target=UNSET, t=UNSET, txt=UNSET, button="Left", count=1, options="", xt=UNSET, xx=UNSET):
     from .input_ import click_window
     m = re.match(r"\s*x(-?\d+)\s+y(-?\d+)", target) if isinstance(target, str) else None
-    if m is None and target is not UNSET and S(target) != "":
+    if m is None and target is not UNSET and (isinstance(target, AhkObject) or S(target) != ""):
         c, win = _ctl(target, t, txt, xt, xx)
         if c is not None:
             from .guiobj import _srv

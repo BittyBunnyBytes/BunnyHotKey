@@ -1824,6 +1824,9 @@ def build_menu(tree, shell):
         shell.append(item)
 
 
+_info_win = None
+
+
 def handle(req):
     global quiet
     op = req["op"]
@@ -1943,6 +1946,26 @@ def handle(req):
             set_client_size(win, req.get("w") if req.get("w") is not None else cw,
                             req.get("h") if req.get("h") is not None else ch - win.chrome_h())
         return True
+    if op == "caret":
+        # caret of the focused text control, in the window's client coordinates (CaretGetPos)
+        win = wins[req["win"]]
+        f = win.w.get_focus()
+        if isinstance(f, Gtk.TextView):
+            buf = f.get_buffer()
+            rect = f.get_iter_location(buf.get_iter_at_mark(buf.get_insert()))
+            bx, by = f.buffer_to_window_coords(Gtk.TextWindowType.TEXT, rect.x, rect.y)
+            tw = f.get_window(Gtk.TextWindowType.TEXT)
+            ox, oy = tw.get_position() if tw is not None else (0, 0)
+            r = f.translate_coordinates(win.box, bx + ox, by + oy)
+            return [int(r[0]), int(r[1] + win.menu_h())] if r else None
+        if isinstance(f, Gtk.Entry):
+            lay = f.get_layout()
+            lx, ly = f.get_layout_offsets()
+            idx = f.text_index_to_layout_index(f.get_position())
+            strong, _ = lay.get_cursor_pos(len(f.get_text()[:idx].encode("utf-8")) if idx else 0)
+            r = f.translate_coordinates(win.box, lx + strong.x // Pango.SCALE, ly + strong.y // Pango.SCALE)
+            return [int(r[0]), int(r[1] + win.menu_h())] if r else None
+        return None
     if op == "focused":
         win = wins[req["win"]]
         f = win.w.get_focus()
@@ -2172,19 +2195,30 @@ def handle(req):
             tw.move(int(req["x"]), int(req["y"]))
             tw.show_all()
             tips[n] = tw
-        return True
+            gw = tw.get_window()
+            return gw.get_xid() if gw is not None and hasattr(gw, "get_xid") else 0
+        return 0
     if op == "tray":
         return tray_op(req)
     if op == "info":
-        w = Gtk.Window(title=req.get("title", ""))
-        w.set_default_size(560, 380)
-        tv = Gtk.TextView()
-        tv.set_editable(False)
-        tv.set_monospace(True)
-        tv.get_buffer().set_text(req.get("text", ""))
-        sw = Gtk.ScrolledWindow()
-        sw.add(tv)
-        w.add(sw)
+        # the main window's ListVars/ListHotkeys/KeyHistory/ListLines view: one window, class "AutoHotkey"
+        global _info_win
+        w = _info_win
+        if w is None:
+            w = Gtk.Window()
+            w.set_wmclass("AutoHotkey", "AutoHotkey")
+            w.set_default_size(560, 380)
+            tv = Gtk.TextView()
+            tv.set_editable(False)
+            tv.set_monospace(True)
+            sw = Gtk.ScrolledWindow()
+            sw.add(tv)
+            w.add(sw)
+            w.tv = tv
+            w.connect("delete-event", lambda win, _e: win.hide() or True)
+            _info_win = w
+        w.set_title(req.get("title", ""))
+        w.tv.get_buffer().set_text(req.get("text", ""))
         w.show_all()
         w.present()
         return True

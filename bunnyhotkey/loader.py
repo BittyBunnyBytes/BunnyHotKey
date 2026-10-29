@@ -223,6 +223,7 @@ class Program:
         self.rt = rt = Runtime(path, args, options)
         rt.lib_core = core
         setup(rt)
+        _ih_setup()
         register_all(rt)
         for name, cls in CLASSES.items():
             if "." in name:

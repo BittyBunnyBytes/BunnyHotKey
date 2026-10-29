@@ -1,7 +1,7 @@
 {
   "_help": "Edit this file, then run: python3 tools/parity_chart.py  (redraws assets/parity.svg and the summaries in README.md and docs/PARITY.md). Areas with \"measure\" are computed automatically; the others use \"percent\". Order here = order in the chart.",
   "title": "Bunny Hot Key - parity with AutoHotkey v2 and v1",
-  "subtitle": "Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md",
+  "subtitle": "Pass rates of run tests (tests/conformance; built-ins: share called by a passing test). Details: docs/PARITY.md",
   "corpus": {
     "loaded": 332,
     "total": 337,
@@ -10,8 +10,8 @@
   "areas": [
     {
       "area": "Language syntax & semantics (v2.0)",
-      "percent": 99,
-      "note": "all v2.0 constructs; regression suite"
+      "note": "{passed} of {count} checks (v2 language suite)",
+      "measure": "suite:v2_language"
     },
     {
       "area": "Real-world v2 scripts that load",
@@ -20,63 +20,63 @@
     },
     {
       "area": "Strings / RegEx / Math / Dates",
-      "measure": "builtins:strings",
-      "note": "{full} of {count} functions"
+      "measure": "runtested:strings",
+      "note": "{covered} of {count} functions run-tested"
     },
     {
       "area": "Keyboard & mouse functions",
-      "measure": "builtins:input",
-      "note": "Send, Click, Hotkey(), InputHook..."
+      "measure": "runtested:input",
+      "note": "{covered} of {count} functions run-tested"
     },
     {
       "area": "Process / Run / System",
-      "measure": "builtins:process",
-      "note": "Run, Process*, Env*, Sound*, Reg*, monitors"
+      "measure": "runtested:process",
+      "note": "{covered} of {count} functions run-tested"
     },
     {
       "area": "Files / Dirs / INI",
-      "measure": "builtins:files",
-      "note": "Drive* read real mount metadata"
+      "measure": "runtested:files",
+      "note": "{covered} of {count} functions run-tested"
     },
     {
       "area": "Window functions (Win*)",
-      "measure": "builtins:window",
-      "note": "EWMH + X Shape (regions, TransColor)"
+      "measure": "runtested:window",
+      "note": "{covered} of {count} functions run-tested"
     },
     {
       "area": "Tray icon & menu",
-      "percent": 99,
-      "note": "AHK_NOTIFYICON clicks, balloons"
+      "note": "{passed} of {count} checks, icon clicked in the panel",
+      "measure": "suite:v2_tray"
     },
     {
       "area": "Hotkeys & hotstrings (X11)",
-      "percent": 99,
-      "note": "SendLevel rules, bare modifiers, end keys"
+      "note": "{passed} of {count} checks with real X11 input",
+      "measure": "suite:v2_hotkeys"
     },
     {
       "area": "All built-in functions",
-      "measure": "builtins:all",
-      "note": "{full} full, {partial} partial, {missing} missing"
+      "measure": "runtested:all",
+      "note": "{covered} of {count} called by a passing test"
     },
     {
       "area": "Gui",
-      "percent": 98,
-      "note": "23 of 23 control types"
+      "note": "{passed} of {count} checks (v2 Gui suite)",
+      "measure": "suite:v2_gui"
     },
     {
       "area": "Win32 controls (Control*, Edit*)",
-      "note": "Win32 messages, OnNotify; AT-SPI apps",
-      "percent": 96
+      "note": "{passed} of {count} checks on test windows",
+      "measure": "suite:v2_controls"
     },
     {
       "area": "COM / ActiveX",
-      "percent": 75,
-      "note": "native vtables, ComCall, ROT"
+      "note": "{passed} of {count} checks incl. Windows' own servers",
+      "measure": "suite:v2_com"
     },
     {
       "area": "Wayland input",
       "percent": 0,
-      "note": "dropped for now"
+      "note": "not supported (no backend to test)"
     }
   ],
   "missing": [
@@ -98,8 +98,8 @@
       },
       {
         "area": "v1 hotkey syntax & #If directives",
-        "percent": 95,
-        "note": "unbraced bodies, labels, remaps, #If*"
+        "note": "{passed} of {count} checks with real X11 input",
+        "measure": "v1:hotkeys"
       },
       {
         "area": "v1 commands (comma syntax)",
@@ -108,12 +108,12 @@
       },
       {
         "area": "v1 language (If var =, Gosub, objects)",
-        "note": "{passed} of {count} checks (tests/v1conf)",
+        "note": "{passed} of {count} checks (tests/conformance)",
         "measure": "v1:language"
       },
       {
         "area": "v1 Gui (Gui, GuiControl, LV_/TV_/SB_)",
-        "note": "{passed} of {count} checks (tests/v1conf)",
+        "note": "{passed} of {count} checks (tests/conformance)",
         "measure": "v1:gui"
       }
     ]

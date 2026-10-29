@@ -1,3 +1,4 @@
+;; suite: v1
 ; AutoHotkey v1.1 language conformance (tools/v1_conformance.py). One feature per section.
 ; Expected output follows the v1.1 documentation (Language, Variables, Functions, Objects, Commands).
 

@@ -207,8 +207,7 @@ def ToolTip(text=UNSET, x=UNSET, y=UNSET, which=1):
     from . import gtkdlg
     if gtkdlg.available():
         from .guiobj import tooltip
-        tooltip(n, t, x, y)
-        return ""
+        return tooltip(n, t, x, y) if t else (tooltip(n, t, x, y), "")[1]
     if t:
         print(f"[ToolTip] {t}", file=sys.stderr)
     return ""

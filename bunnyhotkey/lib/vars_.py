@@ -162,7 +162,7 @@ def register_vars(rt):
     ro("A_ScreenHeight", lambda: window.screen_size()[1])
     ro("A_ScreenDPI", lambda: window.screen_dpi())
     ro("A_Cursor", lambda: window.cursor_name())
-    rw("A_Clipboard", lambda: clipboard.get_text(), lambda v: clipboard.set_text(rt.to_str(v)))
+    rw("A_Clipboard", lambda: clipboard.get_text(), lambda v: clipboard.set_text(_clip_value(rt, v)))
     rw("Clipboard", lambda: clipboard.get_text(), lambda v: clipboard.set_text(rt.to_str(v)))
 
 
@@ -188,6 +188,15 @@ def _loopread(rt):
     return "" if v is UNSET else v
 
 
+def _clip_value(rt, v):
+    """A_Clipboard := ClipboardAll() restores saved contents (BHK's ClipboardAll holds the text as UTF-16)."""
+    from ..objects import AhkObject
+    data = getattr(v, "data", None)
+    if isinstance(v, AhkObject) and isinstance(data, (bytes, bytearray, memoryview)):
+        return bytes(data).decode("utf-16-le", "replace").split("\0", 1)[0]
+    return rt.to_str(v)
+
+
 def _loopfile(rt, attr):
     info = rt.thread.loop.file
     if info is None:
@@ -201,7 +210,7 @@ def _loopfile(rt, attr):
         i = name.rfind(".")
         return name[i + 1:] if i > 0 else ""
     if attr in ("Path", "ShortPath"):
-        return P.join(info.pattern_dir, name) if info.pattern_dir else name
+        return info.pattern_dir + getattr(info, "sep", "/") + name if info.pattern_dir else name
     if attr == "FullPath":
         return info.path
     if attr == "Dir":

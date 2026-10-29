@@ -194,6 +194,26 @@ class Scope:
             self.local_names.append(name)
         return self.locals[key]
 
+    def outer_static(self, key):
+        """A static variable of an enclosing function that `key` refers to (FindUpVar returns those too)."""
+        p = self.parent
+        while p is not None and p.kind == "func":
+            if key in p.statics:
+                return p.statics[key]
+            if key in p.locals:
+                return None
+            p = p.parent
+        return None
+
+    def outer_has(self, key):
+        """True if an enclosing function has a local or static `key` that a nested function captures."""
+        p = self.parent
+        while p is not None and p.kind == "func":
+            if key in p.statics or (key in p.locals and key not in p.declared_global):
+                return True
+            p = p.parent
+        return False
+
     def capture(self, key):
         """Resolve `key` in an enclosing function; returns a free index or None."""
         if key in self.captures:
@@ -431,6 +451,7 @@ class Runtime:
         self.on_exit_funcs: list = []
         self.on_error_funcs: list = []
         self.label_table = {}
+        self.global_labels: set[str] = set()
         self.v1 = False
         self.v1_hex = False
         self.hotkeys = None
@@ -782,11 +803,17 @@ class Runtime:
                     return
                 if t.priority < self.thread.priority:
                     continue
-                if not self.thread.settings.allow_timers and False:
-                    continue
+                if not self.thread.settings.allow_timers and self._thread_running():
+                    continue        # Thread "NoTimers" (application.cpp: ignored when no thread is running)
                 t.fire(self)
 
+    def _thread_running(self):
+        """True while a script thread runs (the idle state after auto-execute has none)."""
+        return len(self.threads) > 1 or not getattr(self, "auto_exec_done", False)
+
     def next_timer_due(self):
+        if not self.thread.settings.allow_timers and self._thread_running():
+            return None
         due = [t.next_due for t in self.timers if t.enabled and not t.running]
         return min(due) if due else None
 

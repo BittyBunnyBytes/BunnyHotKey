@@ -196,6 +196,8 @@ class Compiler:
                 continue
             if name.startswith("a_") and name in self.rt.bivars:
                 continue
+            if not self.v1 and name not in scope.locals and not scope.assume_global and scope.outer_has(name):
+                continue        # v2: assigning an outer function's variable captures it (Script::FindUpVar)
             scope.add_local(name)
         for g in scope.declared_global:
             self._gcell(g)
@@ -227,6 +229,7 @@ class Compiler:
             cf.assume_global = scope.assume_global
         cf.nlocals = len(scope.local_names)
         cf.local_names = list(scope.local_names)
+        cf.label_names = scope.labels
         cf.body = body
         cf.is_closure = bool(scope.capture_list)
         cf.capture_list = scope.capture_list
@@ -259,6 +262,9 @@ class Compiler:
             return ("static", scope.statics[key])
         if key in scope.locals:
             return ("local", scope.locals[key])
+        st = scope.outer_static(key)
+        if st is not None:
+            return ("static", st)
         idx = scope.capture(key)
         if idx is not None:
             return ("free", idx)
@@ -1178,6 +1184,7 @@ class Compiler:
         for s in stmts:
             if isinstance(s, A.Label):
                 labels[s.name.lower()] = len(compiled)
+                (rt.global_labels if scope.kind == "global" else scope.labels).add(s.name.lower())   # IsLabel
                 pending_label = s.name
                 continue
             if isinstance(s, (A.FuncDef,)) and scope.kind == "func":
@@ -1627,8 +1634,12 @@ class Compiler:
         if isinstance(node, A.Directive):
             if node.name.lower() == "hotif" and node.expr is not None:
                 cf = CompiledFunc(self.rt, "")
+                body = [A.Return(node.expr, line=node.line, file=node.file)]
+                if self.v1:
+                    # v1's #If expression sees the script's global variables (an assume-global function)
+                    body.insert(0, A.Decl("global", [], line=node.line, file=node.file))
                 fd = A.FuncDef("", [A.Param("ThisHotkey", False, None, True, False)],
-                               A.Block([A.Return(node.expr, line=node.line, file=node.file)]), False, True, False, "hotif",
+                               A.Block(body), False, True, False, "hotif",
                                line=node.line, file=node.file)
                 self.compile_func(fd, cf, None)
                 return ("directive", node, UserFunc(cf))

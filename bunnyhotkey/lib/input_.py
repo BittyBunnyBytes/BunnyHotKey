@@ -462,10 +462,45 @@ def MouseGetPos(outx=UNSET, outy=UNSET, outwin=UNSET, outctrl=UNSET, flag=0):
     cx, cy = _screen_to_coord(x, y)
     setref(outx, cx)
     setref(outy, cy)
+    win = b.window_under_mouse() if (outwin is not UNSET or outctrl is not UNSET) else 0
     if outwin is not UNSET:
-        setref(outwin, b.window_under_mouse())
-    setref(outctrl, "")
+        setref(outwin, win)
+    if outctrl is not UNSET:
+        setref(outctrl, _control_at(win, x, y, rt().to_int(flag) & 2) if win else "")
     return ""
+
+
+def _control_at(win, x, y, want_hwnd):
+    """ClassNN (or HWND with flag 2) of the innermost control under screen point (x, y) in `win`."""
+    from .window import _dpy, _win_info, geometry, frame_extents
+    from .guiobj import classnn, gui_for_window
+    d = _dpy()
+    best = None
+    g = gui_for_window(win)
+    if g is not None:
+        cx, cy, _, _ = geometry(d, win, client=True)
+        px, py = x - cx, y - cy
+        for c in g.ctrls:
+            if not c.visible or not c.w or not c.h:
+                continue
+            if c.x <= px < c.x + c.w and c.y <= py < c.y + c.h and (best is None or c.w * c.h <= best[0]):
+                best = (c.w * c.h, c)
+        if best is None:
+            return ""
+        c = best[1]
+        return rt().get_prop(c, "Hwnd") if want_hwnd else classnn(c)
+    from . import atspi_
+    if not atspi_.available():
+        return ""
+    gx, gy, _, _ = geometry(d, win)
+    px, py = x - gx, y - gy
+    for f in atspi_.controls(*_win_info(win)):
+        fx, fy, fw, fh = f.pos()
+        if fw and fh and fx <= px < fx + fw and fy <= py < fy + fh and (best is None or fw * fh <= best[0]):
+            best = (fw * fh, f)
+    if best is None:
+        return ""
+    return best[1].hwnd if want_hwnd else best[1].classnn
 
 
 # ---------------------------------------------------------------- key state
@@ -723,8 +758,7 @@ def Hotstring(string, replacement=UNSET, onoff=UNSET):
     if onoff is not UNSET:
         v = S(onoff).lower()
         h.enabled = v in ("1", "on", "true") or (v in ("-1", "toggle") and not h.enabled)
-    if rt().backend is not None:
-        rt().backend.refresh()
+    backend().refresh()             # start the hook if this is the script's first hotstring
     return ""
 
 
@@ -751,7 +785,7 @@ class InputHookObj(AhkObject):
         self.timeout = float(tm.group(1)) if tm else 0
         self.visible = "V" in o
         self.case = "C" in o
-        self.min_send_level = 1
+        self.min_send_level = 0      # hook.h: 0 collects all input, including the script's own Send
         self.end_keys = []
         i = 0
         while i < len(end_keys):
@@ -813,9 +847,13 @@ def _ih_end(ih, reason, key=""):
 
 def _ih_setup():
     from ..classes import method, prop
-    p = CLASSES["InputHook"].prototype
+    cls = CLASSES["InputHook"]
+    p = cls.prototype
     if p.own("Start") is not None:
         return
+    # InputHook(...) calls the class: build the object here so subclasses (class X extends InputHook) work too
+    cls.factory = lambda proto: _ih_blank(proto)
+    method(p, "__New", lambda this, o="", e="", m="": _ih_config(this, o, e, m))
     method(p, "Start", lambda this: _ih_start(this))
     method(p, "Stop", lambda this: _ih_end(this, "Stopped") if this.in_progress else "")
     method(p, "Wait", lambda this, timeout=UNSET: _ih_wait(this, timeout))
@@ -832,6 +870,19 @@ def _ih_setup():
     for nm in ("BackspaceIsUndo", "CaseSensitive", "FindAnywhere", "MinSendLevel", "NotifyNonText", "Timeout",
                "VisibleNonText", "VisibleText"):
         prop(p, nm, get=lambda this, n=nm: getattr(this, "_" + n, 0), set=lambda this, v, n=nm: None)
+
+
+def _ih_blank(proto):
+    ih = InputHookObj()
+    ih.base = proto
+    return ih
+
+
+def _ih_config(this, options, end_keys, match_list):
+    base = this.base
+    InputHookObj.__init__(this, S(options), S(end_keys), S(match_list))
+    this.base = base
+    return ""
 
 
 def _ih_start(ih):
@@ -884,12 +935,23 @@ def CaretGetPos(outx=UNSET, outy=UNSET):
 
 def _caret_screen_pos():
     from . import atspi_
-    from .window import _dpy, _win_info, active_window
-    if not atspi_.available():
-        return None
+    from .window import _dpy, _win_info, active_window, geometry
     d = _dpy()
     win = active_window(d) if d is not None else 0
     if not win:
+        return None
+    from .guiobj import _srv, gui_for_window
+    g = gui_for_window(win)
+    if g is not None:                       # this script's own Gui: ask the toolkit directly
+        try:
+            pos = _srv().call("caret", win=g.wid)
+        except Exception:
+            pos = None
+        if not pos:
+            return None
+        cx, cy, _, _ = geometry(d, win, client=True)
+        return cx + pos[0], cy + pos[1]
+    if not atspi_.available():
         return None
     root = atspi_.window_accessible(*_win_info(win))
     if root is None:

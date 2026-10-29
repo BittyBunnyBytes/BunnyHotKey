@@ -64,8 +64,11 @@ class X11Backend:
         self.mod_released: set[int] = set()      # suppressed modifiers whose keyboard grab was let go
         self.hs_fed: set[int] = set()            # grabbed end-char keys already fed to the hotstring recognizer
         self.end_codes: set[int] = set()
+        self.end_grabs: set[tuple] = set()
+        self.replayed: set[int] = set()             # grabbed keys whose press was replayed to the app          # (keycode, mask) grabs held for hotstring end characters
         self.xi_opcode = None
         self.need_refresh = threading.Event()
+        self.applied = threading.Event()            # set once a refresh's grabs reached the X server
         self.spare_keycode = None
         self.shift = False
 
@@ -82,7 +85,9 @@ class X11Backend:
         self._setup_xi2()
         self.running = True
         self.thread = threading.Thread(target=self._loop, name="bhk-x11", daemon=True)
+        self.applied.clear()
         self.thread.start()
+        self.applied.wait(1.0)          # grabs are live before the script goes on (and maybe Sends)
 
     def stop(self):
         self.running = False
@@ -96,11 +101,16 @@ class X11Backend:
                 pass
 
     def refresh(self):
+        """Re-apply grabs; waits until the X server has them (the Windows hook takes effect at once, so a
+        Send right after Hotkey()/Hotstring() must already be seen)."""
+        self.applied.clear()
         self.need_refresh.set()
         try:
             os.write(self.wake_w, b"r")
         except OSError:
             pass
+        if threading.current_thread() is not getattr(self, "thread", None) and self.running:
+            self.applied.wait(0.5)
 
     # ------------------------------------------------------------ XI2
     def _setup_xi2(self):
@@ -185,8 +195,7 @@ class X11Backend:
                         for mk in masks:
                             want_buttons[(btn, mk)] = True
         for key in list(self.grabbed_keys):
-            if key not in want_keys and not (key[1] == xlib.AnyModifier and
-                                             key[0] - 8 in getattr(self, "end_codes", set())):
+            if key not in want_keys and key not in self.end_grabs:
                 x.XUngrabKey(d.dpy, key[0], key[1], d.root)
                 del self.grabbed_keys[key]
         for key in want_keys:
@@ -224,16 +233,18 @@ class X11Backend:
                         k = layout.char_to_key(ch)
                         if k and k[0] + 8 not in {kk for kk, _ in want_keys}:
                             end_codes.add(k[0])
-        for kc in end_codes:
-            key = (kc + 8, xlib.AnyModifier)
+        # Explicit masks (unmodified or Shift, under every lock-key state), not AnyModifier: an AnyModifier
+        # grab fails as a whole when another client holds any combination of the key (xfwm4 grabs Alt+Space).
+        want_end = {(kc + 8, base | lk) for kc in end_codes for base in (0, MOD_MASK["shift"]) for lk in LOCK_COMBOS}
+        for key in want_end:
             if key not in self.grabbed_keys:
                 x.XGrabKey(d.dpy, key[0], key[1], d.root, 1, xlib.GrabModeAsync, xlib.GrabModeSync)
                 self.grabbed_keys[key] = True
-        for key in list(self.grabbed_keys):
-            if key[1] == xlib.AnyModifier and key[0] - 8 in getattr(self, "end_codes", set()) and \
-                    key[0] - 8 not in end_codes and key not in want_keys:
+        for key in list(self.end_grabs):
+            if key not in want_end and key not in want_keys and key in self.grabbed_keys:
                 x.XUngrabKey(d.dpy, key[0], key[1], d.root)
                 del self.grabbed_keys[key]
+        self.end_grabs = want_end
         self.end_codes = end_codes
         self.cond_mods = cond_mods
         codes |= end_codes
@@ -255,10 +266,14 @@ class X11Backend:
         active_atom = d.atom("_NET_ACTIVE_WINDOW")
         self.cond_mods = False
         self._apply_grabs()
+        x.XSync(d.dpy, 0)
+        self.applied.set()
         while self.running:
             if self.need_refresh.is_set():
                 self.need_refresh.clear()
                 self._apply_grabs()
+                x.XSync(d.dpy, 0)
+                self.applied.set()
             if not x.XPending(d.dpy):
                 r, _, _ = select.select([fd, self.wake_r], [], [], 0.5)
                 if self.wake_r in r:
@@ -296,7 +311,8 @@ class X11Backend:
         engine = self.rt.hotkeys
         level = self.sent_level(code, down, 5)
         suppress = engine.on_event(code, down, level=level) if engine is not None else False
-        if down and not suppress and code in getattr(self, "end_codes", ()):
+        if down and not suppress and code in getattr(self, "end_codes", ()) and level != 0:
+            # (the script's own SendLevel-0 output, e.g. a hotstring's replacement, stays out of the buffer)
             hs = self.rt.hotstrings
             ch = self._char_for(code, level)
             if hs is not None and ch:
@@ -310,6 +326,8 @@ class X11Backend:
             self.mod_released.add(code)
         elif down:
             d.x.XAllowEvents(d.dpy, xlib.AsyncKeyboard if suppress else xlib.ReplayKeyboard, kev.time)
+            if not suppress:
+                self.replayed.add(code)     # its release goes to the app: the raw event reports it (F16 up::)
         else:
             d.x.XAllowEvents(d.dpy, xlib.AsyncKeyboard, kev.time)
             if not suppress and code not in engine.suppressed_down:
@@ -337,6 +355,11 @@ class X11Backend:
                 level = self.sent_level(code, down, 4)
                 (self.sent_down.add if down else self.sent_down.discard)(code)
                 engine = self.rt.hotkeys
+                if not down and code in self.replayed:
+                    self.replayed.discard(code)
+                    if engine is not None:
+                        engine.on_event(code, False, level=level)
+                    return
                 if not down and code in self.mod_released and engine is not None:
                     self.mod_released.discard(code)
                     engine.on_event(code, False, level=level)
@@ -345,6 +368,15 @@ class X11Backend:
                     engine.on_event(code, down, level=level)
                 if level and down:
                     self._typed(code, code in self.grabbed_codes, level)
+                elif down:
+                    # SendLevel 0: no hotkey or hotstring sees it, but an InputHook with MinSendLevel 0
+                    # collects all input (hook.cpp, InputHook's MinSendLevel check)
+                    from ..lib.input_ import input_hook_char, _ACTIVE_HOOKS
+                    if _ACTIVE_HOOKS:
+                        k = K.from_code(code)
+                        held = self.phys_down | self.sent_down
+                        ch = "" if any(c in held for c in (29, 97, 56, 125, 126)) else self._char_for(code, level=-1)
+                        input_hook_char(ch if ch != "\b" else "", k.name if k else "", 0)
             return
         self.last_input = time.monotonic()
         engine = self.rt.hotkeys
@@ -354,7 +386,11 @@ class X11Backend:
             repeat = bool(raw.flags & (1 << 16))
             (self.phys_down.add if down else self.phys_down.discard)(code)
             grabbed = code in self.grabbed_codes
-            if engine is not None and not grabbed:
+            if not down and code in self.replayed:
+                self.replayed.discard(code)
+                if engine is not None:
+                    engine.on_event(code, False)
+            elif engine is not None and not grabbed:
                 engine.on_event(code, down, repeat=repeat)
             elif engine is not None and not down and code in self.mod_released:
                 self.mod_released.discard(code)  # its release went to the app after the grab was let go
