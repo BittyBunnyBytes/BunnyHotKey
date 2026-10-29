@@ -169,7 +169,8 @@ class GuiObj(AhkObject):
 class CtrlObj(AhkObject):
     __slots__ = ("cid", "gui", "ctype", "name", "events", "x", "y", "w", "h", "rows", "altsubmit", "group",
                  "enabled", "visible", "tab", "buddy", "multi", "readonly", "password", "sized", "font",
-                 "dtformat", "imagelist", "color", "bg", "header", "exstyle", "_com")
+                 "dtformat", "imagelist", "color", "bg", "header", "exstyle", "_com", "custom",
+                 "command_cbs", "notify_cbs")
 
     def __init__(self, gui, ctype):
         super().__init__(CLASSES["Gui." + CLASS_OF.get(ctype, "Text")].prototype)
@@ -197,6 +198,9 @@ class CtrlObj(AhkObject):
         self.header = TAB_HEADER
         self.exstyle = None
         self._com = None
+        self.custom = ""            # the Win32 class of a Custom control ("sysipaddress32"), else ""
+        self.command_cbs = {}       # OnCommand: notification code -> callbacks
+        self.notify_cbs = {}        # OnNotify
 
 
 def _srv():
@@ -410,9 +414,9 @@ def gui_add(this, ctype, options="", text=UNSET):
     t = TYPE_ALIASES.get(S(ctype).lower())
     if t is None:
         throw("ValueError", "Invalid control type.", S(ctype))
+    custom = ""
     if t == "Custom":
-        throw("Error", "Custom controls host Win32 window classes, which don't exist on Linux "
-                       "(not supported by Bunny Hot Key).", S(ctype))
+        t, custom, options = _custom_class(options)
     if t == "ActiveX" and not re.match(r"\s*(shell\.explorer|mshtml:|about:|https?:|file:)", S(text) if text is not UNSET
                                        else "", re.I):
         throw("Error", "Only the web browser ActiveX control (Shell.Explorer, mshtml:, a URL) is available on Linux.",
@@ -425,6 +429,11 @@ def gui_add(this, ctype, options="", text=UNSET):
         opts = f"x{tab[0].x + this.mx} y{tab[0].y + tab[0].header + this.my} " + opts
     x, y, w, h, flags = _parse_pos(this, opts, t)
     ctrl = CtrlObj(this, t)
+    if custom:
+        ctrl.custom = custom
+        ctrl.base = CLASSES["Gui.Custom"].prototype
+        if custom in RICH_CLASSES:
+            flags["multi"] = True
     send = {"x": x, "y": y, "w": w, "h": h}
     ctrl.sized = (w is not None, h is not None)
     items = []
@@ -514,6 +523,47 @@ def gui_add(this, ctype, options="", text=UNSET):
     if t == "Tab":
         this.tab = (ctrl, 1)      # later controls go on the first page until UseTab()
     return ctrl
+
+
+# Custom controls (Gui.Add("Custom", "ClassName ...")): Win32 window classes and the control each is drawn as.
+# The control behaves as that class does: its Win32 messages (ctlmsg.py) and WM_COMMAND/WM_NOTIFY
+# notifications (OnCommand/OnNotify, notify.py) are the class's; it has no Value and raises no named events.
+CUSTOM_CLASSES = {"button": "Button", "edit": "Edit", "static": "Text", "combobox": "ComboBox",
+                  "listbox": "ListBox", "syslistview32": "ListView", "systreeview32": "TreeView",
+                  "msctls_progress32": "Progress", "msctls_trackbar32": "Slider", "msctls_updown32": "UpDown",
+                  "msctls_hotkey32": "Hotkey", "sysdatetimepick32": "DateTime", "sysmonthcal32": "MonthCal",
+                  "systabcontrol32": "Tab", "msctls_statusbar32": "StatusBar", "syslink": "Link",
+                  "scrollbar": "Slider", "sysipaddress32": "IPAddress",
+                  "richedit": "Edit", "richedit20a": "Edit", "richedit20w": "Edit", "richedit50w": "Edit",
+                  "richedit60w": "Edit", "richeditd2dpt": "Edit", "scintilla": "Edit"}
+RICH_CLASSES = {"richedit", "richedit20a", "richedit20w", "richedit50w", "richedit60w", "richeditd2dpt", "scintilla"}
+CUSTOM_DISPLAY = {"sysipaddress32": "SysIPAddress32", "scintilla": "Scintilla", "richedit20a": "RichEdit20A",
+                  "richedit20w": "RichEdit20W", "richedit50w": "RICHEDIT50W", "richedit60w": "RICHEDIT60W",
+                  "richedit": "RichEdit", "richeditd2dpt": "RichEditD2DPT"}
+
+
+def _custom_class(options):
+    """(drawn-as type, class key, options without the Class option) for a Custom control."""
+    opts = S(options) if options is not UNSET else ""
+    m = re.search(r"(?:^|\s)Class(\S+)", opts, re.I)
+    if m is None:
+        throw("Error", "A window class is required.")
+    key = m.group(1).lower()
+    t = CUSTOM_CLASSES.get(key)
+    if t is None:
+        throw("ValueError", "Unrecognized window class.", m.group(0).strip())
+    rest = (opts[:m.start()] + " " + opts[m.end():]).strip()
+    style = 0
+    for tok in re.findall(r"(?:^|\s)\+?(0x[0-9a-f]+|\d+)(?=\s|$)", rest, re.I):
+        style |= int(tok, 0)
+    if key == "button":
+        kind = style & 0xF
+        t = "CheckBox" if kind in (2, 3, 5, 6) else "Radio" if kind in (4, 9) else "GroupBox" if kind == 7 else t
+    elif key == "combobox" and style & 3 == 3:
+        t = "DDL"                                   # CBS_DROPDOWNLIST
+    elif key == "edit" and style & 4:
+        rest += " Multi"                            # ES_MULTILINE
+    return t, key, rest
 
 
 def rows_of(opts):
@@ -777,7 +827,7 @@ def dispatch_event(msg):
         return
     if ev == "MenuClosed":
         return
-    if ev in ("TrayItem", "TrayDefault"):
+    if ev in ("TrayItem", "TrayDefault", "TrayMouse"):
         from . import tray
         tray.on_event(msg)
         return
@@ -809,10 +859,19 @@ def dispatch_event(msg):
         c = CTRLS.get(msg["ctrl"])
         if c is None:
             return
-        cbs = list(c.events.get(ev.lower(), []))
+        args = msg.get("args", [msg.get("row", 0)])
+        from . import notify
+        cbs = [] if c.custom else list(c.events.get(ev.lower(), []))   # Custom controls only notify
+        if notify.wants(c, ev):
+            def run(c=c, ev=ev, args=args, cbs=cbs):
+                if notify.deliver(c, ev, args):
+                    return
+                for cb in cbs:
+                    _resolve_cb(c.gui, cb)([c, *args])
+            r.post(run)
+            return
         if not cbs:
             return
-        args = msg.get("args", [msg.get("row", 0)])
         if c.ctype == "Link" and ev == "Click":
             args = [args[0] if args and args[0] != 0 else "", args[0] if args else ""]
         for cb in cbs:
@@ -843,6 +902,11 @@ def dispatch_event(msg):
     for cb in cbs:
         fn = _resolve_cb(g, cb)
         r.post(lambda fn=fn: fn([g]))
+
+
+def _notify_reg(c, kind, code, cb, add):
+    from . import notify
+    return notify.register(c, kind, code, cb, add)
 
 
 def _lv_fields(args):
@@ -960,7 +1024,8 @@ def setup():
     prop(gp, "__Item", get=lambda this, name: _gui_item(this, name))
 
     cp = CLASSES["Gui.Control"].prototype
-    prop(cp, "Value", get=lambda this: _ctrl_value(this), set=lambda this, v: ctrl_set(this, "Value", v))
+    prop(cp, "Value", get=lambda this: _ctrl_value(this),
+         set=lambda this, v: throw("Error", "Invalid usage.") if this.custom else ctrl_set(this, "Value", v))
     prop(cp, "Text", get=lambda this: ctrl_get(this, "Text"), set=lambda this, v: ctrl_set(this, "Text", S(v)))
     prop(cp, "Enabled", get=lambda this: int(this.enabled), set=lambda this, v: ctrl_set_enabled(this, v))
     prop(cp, "Visible", get=lambda this: int(this.visible), set=lambda this, v: ctrl_set_visible(this, v))
@@ -968,11 +1033,11 @@ def setup():
     prop(cp, "Name", get=lambda this: this.name, set=lambda this, v: setattr(this, "name", S(v)))
     prop(cp, "Hwnd", get=lambda this: this.cid)
     prop(cp, "Gui", get=lambda this: this.gui)
-    prop(cp, "Type", get=lambda this: this.ctype)
+    prop(cp, "Type", get=lambda this: "Custom" if this.custom else this.ctype)
     prop(cp, "ClassNN", get=lambda this: classnn(this))
     method(cp, "OnEvent", lambda this, name, cb, add=1: _on_event(this, name, cb, add))
-    method(cp, "OnNotify", lambda this, *a: "")
-    method(cp, "OnCommand", lambda this, *a: "")
+    method(cp, "OnNotify", lambda this, code, cb, add=1: _notify_reg(this, "notify", code, cb, add))
+    method(cp, "OnCommand", lambda this, code, cb, add=1: _notify_reg(this, "command", code, cb, add))
     method(cp, "Focus", lambda this: _srv().call("focus", ctrl=this.cid) and "")
     method(cp, "Move", lambda this, x=UNSET, y=UNSET, w=UNSET, h=UNSET: _ctrl_move(this, x, y, w, h))
     method(cp, "GetPos", lambda this, *refs: _ctrl_getpos(this, refs))
@@ -1053,9 +1118,15 @@ def sb_text(c, part=1):
     return _srv().call("sb", ctrl=c.cid, do="get", part=part)
 
 
+def _win32_class(c):
+    if c.custom:
+        return CUSTOM_DISPLAY.get(c.custom, WIN32_CLASS.get(CUSTOM_CLASSES[c.custom], c.custom))
+    return WIN32_CLASS.get(c.ctype, c.ctype)
+
+
 def classnn(c):
-    cls = WIN32_CLASS.get(c.ctype, c.ctype)
-    n = sum(1 for o in c.gui.ctrls[:c.gui.ctrls.index(c) + 1] if WIN32_CLASS.get(o.ctype, o.ctype) == cls) \
+    cls = _win32_class(c)
+    n = sum(1 for o in c.gui.ctrls[:c.gui.ctrls.index(c) + 1] if _win32_class(o) == cls) \
         if c in c.gui.ctrls else 1
     return f"{cls}{n}"
 
@@ -1099,6 +1170,8 @@ def _num(v):
 
 
 def _ctrl_value(c):
+    if c.custom:
+        throw("Error", "Invalid usage.")      # script_gui.cpp: a Custom control's "value" is unknown
     if c.ctype == "ActiveX":
         # the hosted COM object: an emulated WebBrowser driving the WebKitGTK view
         from .com import ComDispatch, WebBrowser, _proto_setup

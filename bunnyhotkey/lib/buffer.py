@@ -1,20 +1,21 @@
 """Buffer, NumGet/NumPut, StrGet/StrPut (lib/vars.cpp, script_object.cpp BufferObject).
 
-Addresses are synthetic: each Buffer gets a stable fake address so pointer
-arithmetic (buf.Ptr + offset) round-trips through NumGet/NumPut.
+Each Buffer's bytes live in native memory, so Buffer.Ptr is a real address: native code (DllCall into Linux
+libraries, COM vtables, callbacks) reads and writes it directly, and pointer arithmetic round-trips through
+NumGet/NumPut.  As in AutoHotkey, resizing may move the memory.
 """
 from __future__ import annotations
 
+import ctypes
 import struct
+import weakref
 
 from .. import objects as O
 from ..objects import AhkObject, CLASSES, throw
 from ..values import UNSET
 from . import export
 
-_BASE = 0x10000000
-_next = [_BASE]
-_by_addr: dict[int, "BufferObj"] = {}
+_by_addr: "weakref.WeakValueDictionary[int, BufferObj]" = weakref.WeakValueDictionary()
 
 TYPES = {"char": ("b", 1), "uchar": ("B", 1), "short": ("h", 2), "ushort": ("H", 2), "int": ("i", 4),
          "uint": ("I", 4), "int64": ("q", 8), "uint64": ("Q", 8), "ptr": ("q", 8), "uptr": ("Q", 8),
@@ -22,15 +23,29 @@ TYPES = {"char": ("b", 1), "uchar": ("B", 1), "short": ("h", 2), "ushort": ("H",
 
 
 class BufferObj(AhkObject):
-    __slots__ = ("data", "addr")
+    __slots__ = ("_mem", "_view", "addr")
 
     def __init__(self, size=0, fill=UNSET, base=None):
         super().__init__(base or CLASSES["Buffer"].prototype)
-        self.data = bytearray(size)
-        if fill is not UNSET:
-            self.data[:] = bytes([O.RT.to_int(fill) & 255]) * size
-        self.addr = _next[0]
-        _next[0] += max(size, 1) + 0x1000 + (-(size) % 16)
+        self.addr = 0
+        self.data = bytes([O.RT.to_int(fill) & 255]) * size if fill is not UNSET else bytes(size)
+
+    @property
+    def data(self):
+        """The bytes, as a writable view of the native memory."""
+        return self._view
+
+    @data.setter
+    def data(self, raw):
+        n = len(raw)
+        mem = (ctypes.c_ubyte * max(n, 1))()
+        if n:
+            ctypes.memmove(mem, bytes(raw), n)
+        if self.addr:
+            _by_addr.pop(self.addr, None)
+        self._mem = mem
+        self._view = memoryview(mem).cast("B")[:n]
+        self.addr = ctypes.addressof(mem)
         _by_addr[self.addr] = self
 
 
@@ -43,7 +58,7 @@ def resolve(target, offset=0):
     else:
         ptr = O.RT.to_int(target)
     ptr += offset
-    for addr, b in _by_addr.items():
+    for addr, b in list(_by_addr.items()):
         if addr <= ptr < addr + max(len(b.data), 1):
             return b.data, ptr - addr
     if ptr >= 0x10000:
@@ -65,18 +80,14 @@ def setup(rt, cls):
 
 def _new(this, size, fill):
     n = O.RT.to_int(size) if size != "" else 0
-    this.data = bytearray(n)
-    if fill is not UNSET:
-        this.data[:] = bytes([O.RT.to_int(fill) & 255]) * n
+    this.data = bytes([O.RT.to_int(fill) & 255]) * n if fill is not UNSET else bytes(n)
     return ""
 
 
 def _resize(this, v):
     n = O.RT.to_int(v)
-    if n < len(this.data):
-        del this.data[n:]
-    else:
-        this.data.extend(bytes(n - len(this.data)))
+    old = bytes(this.data)
+    this.data = old[:n] + bytes(max(n - len(old), 0))
     return n
 
 

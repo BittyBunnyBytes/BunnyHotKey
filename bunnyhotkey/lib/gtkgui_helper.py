@@ -175,6 +175,7 @@ def style_targets(c):
             out.append(c[k])
     if c["type"] == "ComboBox":
         out.append(c["w"].get_child())
+    out.extend(c.get("fields", []))
     return out
 
 
@@ -732,6 +733,22 @@ def lv_op(c, req):
             del r[0][col - 1]
         lv_build(c, rows)
         return 1
+    if do == "colwidth":
+        cols = c["tree"].get_columns()
+        i = int(req["col"]) - 1 + (1 if c.get("checked") else 0)
+        if not 0 <= i < len(cols):
+            return 0
+        if req.get("width") is not None:
+            cols[i].set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+            cols[i].set_fixed_width(max(int(req["width"]), 1))
+            return 1
+        return cols[i].get_width() or cols[i].get_fixed_width()
+    if do == "ensurevisible":
+        r = int(req["row"]) - 1
+        if not 0 <= r < len(store):
+            return 0
+        c["tree"].scroll_to_cell(Gtk.TreePath(r), None, False, 0.0, 0.0)
+        return 1
     if do == "content":
         o = (req.get("opts") or "").lower().split()
         if "count" in o:
@@ -819,6 +836,21 @@ def tv_apply(c, it, o, name=None):
 def tv_op(c, req):
     do = req["do"]
     store = c["store"]
+    if do == "expand":
+        it = tv_iter(c, req["item"])
+        if it is None:
+            return 0
+        path = store.get_path(it)
+        tree = c["tree"]
+        how = req.get("how", "expand")
+        if how == "toggle":
+            how = "collapse" if tree.row_expanded(path) else "expand"
+        if how == "collapse":
+            return int(tree.collapse_row(path))
+        if not store.iter_has_child(it):
+            return 0
+        tree.expand_row(path, False)
+        return 1
     if do == "add":
         parent = tv_iter(c, req.get("parent", 0)) if req.get("parent") else None
         if req.get("parent") and parent is None:
@@ -938,6 +970,8 @@ def lb_selected(c):
 def text_of(c):
     w = c["w"]
     t = c["type"]
+    if t == "IPAddress":
+        return ip_text(c)
     if t == "Edit":
         if "tv" in c:
             buf = c["tv"].get_buffer()
@@ -1078,7 +1112,9 @@ def set_value(c, v):
 def set_text(c, s):
     w = c["w"]
     t = c["type"]
-    if t == "Edit":
+    if t == "IPAddress":
+        ip_set(c, s)
+    elif t == "Edit":
         if "tv" in c:
             c["tv"].get_buffer().set_text(s)
         else:
@@ -1196,9 +1232,142 @@ def query(c, what):
             return [before.count("\n") + 1, caret - (before.rfind("\n") + 1) + 1]
         if what == "seltext":
             return text[s:e]
+        if what == "sel":
+            return [s, e]
+    if what == "selected" and t == "ListBox":
+        return lb_selected(c)
+    if what == "range" and t in ("Slider", "UpDown"):
+        adj = c["w"].get_adjustment()
+        return [int(adj.get_lower()), int(adj.get_upper())]
+    if what == "range" and t == "Progress":
+        return [c.get("lo", 0), c.get("lo", 0) + c.get("span", 100)]
+    if what == "top" and t == "ListBox":
+        r = c["tree"].get_visible_range()
+        return r[1].get_indices()[0] if r and r[0] else 0
+    if what == "top" and t in ("DDL", "ComboBox"):
+        return 0
     if what == "dropped" and t in ("DDL", "ComboBox"):
         return int(bool(c["w"].get_property("popup-shown")))
     raise ValueError(f"unsupported query {what} for {t}")
+
+
+def ip_insert(entry, new, length, pos, c, i):
+    """Digits only; a dot or a full field moves on to the next field, as the Win32 control does."""
+    digits = "".join(ch for ch in new if ch.isdigit())
+    if digits != new:
+        entry.stop_emission_by_name("insert-text")
+        if "." in new and i < 3:
+            GLib.idle_add(lambda: c["fields"][i + 1].grab_focus() and False)
+        if digits:
+            GLib.idle_add(lambda: (entry.insert_text(digits, entry.get_position()), False)[1])
+        return
+    if len(entry.get_text()) + len(digits) >= 3 and i < 3 and not quiet:
+        GLib.idle_add(lambda: (c["fields"][i + 1].grab_focus(), False)[1])
+
+
+def ip_clamp(c, i):
+    e = c["fields"][i]
+    if e.get_text():
+        lo, hi = c["ranges"][i]
+        v = min(max(int(e.get_text()), lo), hi)
+        if str(v) != e.get_text():
+            e.set_text(str(v))
+
+
+def ip_set(c, text):
+    parts = str(text).split(".") if str(text) else []
+    for i, e in enumerate(c["fields"]):
+        e.set_text(parts[i].strip() if i < len(parts) else "")
+
+
+def ip_text(c):
+    return ".".join(e.get_text() or "0" for e in c["fields"])
+
+
+def ip_op(c, req):
+    """IPM_ messages: get (fields, None = blank), set, clear, blank, range, focus."""
+    do = req["do"]
+    f = c["fields"]
+    if do == "get":
+        return [int(e.get_text()) if e.get_text() else None for e in f]
+    if do == "set":
+        for e, v in zip(f, req["values"]):
+            e.set_text(str(v))
+        return True
+    if do == "clear":
+        for e in f:
+            e.set_text("")
+        return True
+    if do == "blank":
+        return int(not any(e.get_text() for e in f))
+    if do == "range":
+        c["ranges"][int(req["field"])] = [int(req["lo"]), int(req["hi"])]
+        ip_clamp(c, int(req["field"]))
+        return True
+    if do == "focus":
+        i = int(req["field"])
+        if i > 3:
+            i = next((k for k, e in enumerate(f) if not e.get_text()), 0)
+        f[i].grab_focus()
+        f[i].select_region(0, -1)
+        return True
+    raise ValueError(f"unknown ip op {do}")
+
+
+def ctl_op(op, c, req):
+    """Win32 control messages that need direct widget access (EM_SETSEL, LB_SETSEL, *_SETRANGE, LB_SETTOPINDEX)."""
+    t = c["type"]
+    if op == "editsel":
+        start, end = int(req["start"]), int(req["end"])
+        if "tv" in c:
+            buf = c["tv"].get_buffer()
+            n = buf.get_char_count()
+            end = n if end < 0 or end > n else end
+            if start < 0:
+                ins = buf.get_iter_at_mark(buf.get_insert())
+                buf.place_cursor(ins)
+                return True
+            buf.select_range(buf.get_iter_at_offset(end), buf.get_iter_at_offset(min(start, n)))
+            c["tv"].scroll_mark_onscreen(buf.get_insert())
+        else:
+            w = c["w"]
+            n = len(w.get_text())
+            end = n if end < 0 or end > n else end
+            if start < 0:
+                w.select_region(w.get_position(), w.get_position())
+                return True
+            # select_region(start, end) leaves the cursor at end, as EM_SETSEL does
+            w.select_region(min(start, n), end)
+        return True
+    if op == "lbsel":
+        sel = c["tree"].get_selection()
+        i, on = int(req["index"]), bool(req["on"])
+        if i < 0:
+            (sel.select_all if on else sel.unselect_all)()
+        elif i < len(c["store"]):
+            (sel.select_path if on else sel.unselect_path)(Gtk.TreePath(i))
+        else:
+            return False
+        return True
+    if op == "range":
+        lo, hi = int(req["lo"]), int(req["hi"])
+        if t in ("Slider", "UpDown"):
+            adj = c["w"].get_adjustment()
+            adj.set_lower(min(lo, hi))
+            adj.set_upper(max(lo, hi))
+            c["w"].set_value(min(max(c["w"].get_value(), min(lo, hi)), max(lo, hi)))
+        elif t == "Progress":
+            cur = value_of(c)
+            c["lo"], c["span"] = lo, (hi - lo) or 1
+            set_value(c, min(max(cur, lo), hi))
+        return True
+    if op == "lbtop":
+        i = int(req["index"])
+        if t == "ListBox" and 0 <= i < len(c["store"]):
+            c["tree"].scroll_to_cell(Gtk.TreePath(i), None, True, 0.0, 0.0)
+            return True
+        return False
+    raise ValueError(f"unknown op {op}")
 
 
 # ---------------------------------------------------------------- creating controls
@@ -1387,6 +1556,24 @@ def make(win, cid, t, opts):
             w.set_orientation(Gtk.Orientation.VERTICAL)
             w.set_inverted(True)
         w.set_fraction(max(0.0, min((float(text or lo) - lo) / c["span"], 1.0)))
+    elif t == "IPAddress":
+        # SysIPAddress32: four 0-255 fields separated by dots
+        w = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        w.get_style_context().add_class("linked")
+        fields = []
+        for i in range(4):
+            e = Gtk.Entry(width_chars=3, max_length=3, xalign=0.5)
+            e.set_input_purpose(Gtk.InputPurpose.DIGITS)
+            e.connect("insert-text", ip_insert, c, i)
+            e.connect("changed", lambda _e, i=i: ev(cid, "Change", i))
+            e.connect("focus-out-event", lambda _e, _v, i=i: ip_clamp(c, i) and False)
+            fields.append(e)
+            w.pack_start(e, True, True, 0)
+            if i < 3:
+                w.pack_start(Gtk.Label(label="."), False, False, 2)
+        c["fields"] = fields
+        c["ranges"] = [[0, 255] for _ in range(4)]
+        ip_set(c, text)
     elif t == "GroupBox":
         w = Gtk.Frame(label=text)
     elif t == "Picture":
@@ -1901,6 +2088,18 @@ def handle(req):
             w.insert_text(req["text"], pos)
             w.set_position(pos + len(req["text"]))
         return True
+    if op == "ip":
+        quiet = True
+        try:
+            return ip_op(ctrls[req["ctrl"]], req)
+        finally:
+            quiet = False
+    if op in ("editsel", "lbsel", "range", "lbtop"):
+        quiet = True
+        try:
+            return ctl_op(op, ctrls[req["ctrl"]], req)
+        finally:
+            quiet = False
     if op == "items":
         c = ctrls[req["ctrl"]]
         quiet = True
@@ -1911,6 +2110,8 @@ def handle(req):
                     c["w"].remove_all()
                 if req.get("delete"):
                     c["w"].remove(req["delete"] - 1)
+                if "insert" in req:
+                    c["w"].insert_text(int(req["insert"]["at"]), str(req["insert"]["text"]))
                 for it in req.get("add", []):
                     c["w"].append_text(it)
                 return len(c["w"].get_model())
@@ -1919,6 +2120,8 @@ def handle(req):
                     c["store"].clear()
                 if req.get("delete"):
                     c["store"].remove(c["store"].get_iter(Gtk.TreePath(req["delete"] - 1)))
+                if "insert" in req:
+                    c["store"].insert(int(req["insert"]["at"]), [str(req["insert"]["text"])])
                 for it in req.get("add", []):
                     c["store"].append([it])
                 return len(c["store"])
@@ -2016,20 +2219,26 @@ class Tray:
     """AutoHotkey-style tray icon.  XApp.StatusIcon (Cinnamon/XFCE/MATE, SNI + XEmbed), else
     Gtk.StatusIcon (XEmbed trays), else AppIndicator3 (KDE/GNOME, menu only)."""
 
+    # Win32 mouse messages the tray icon reports (AHK_NOTIFYICON lParam), by GDK button and kind
+    MSGS = {1: (0x201, 0x202, 0x203), 3: (0x204, 0x205, 0x206), 2: (0x207, 0x208, 0x209)}
+
     def __init__(self):
         self.items = []
         self.menu = Gtk.Menu()
         self.kind = None
         self.icon = None
         self.click_count = 2
-        self._last_click = 0
+        self.last_press = (0, 0.0)          # button, time of the previous press (for double-clicks)
+        self.where = None                   # last click (x, y, button, time, panel_position) for the menu
+        self._last_move = 0.0
         try:
             gi.require_version("XApp", "1.0")
             from gi.repository import XApp
             self.icon = XApp.StatusIcon()
             self.icon.set_name(os.environ.get("BHK_TRAY_NAME", "Bunny Hot Key"))
-            self.icon.connect("activate", self._xapp_activate)
-            self.icon.set_secondary_menu(self.menu)
+            # no primary/secondary menu: every click goes to the script, which decides (AHK_NOTIFYICON)
+            self.icon.connect("button-press-event", self._xapp_press)
+            self.icon.connect("button-release-event", self._xapp_release)
             self.kind = "xapp"
         except (ValueError, ImportError):
             pass
@@ -2037,7 +2246,9 @@ class Tray:
             try:
                 self.icon = Gtk.StatusIcon()
                 self.icon.connect("button-press-event", self._gtk_press)
-                self.icon.connect("popup-menu", self._gtk_popup)
+                self.icon.connect("button-release-event", self._gtk_release)
+                self.icon.set_has_tooltip(True)
+                self.icon.connect("query-tooltip", self._gtk_hover)
                 self.kind = "gtk"
             except (AttributeError, TypeError):
                 self.icon = None
@@ -2047,34 +2258,65 @@ class Tray:
             self.icon = AppIndicator3.Indicator.new("bunnyhotkey", "bunnyhotkey",
                                                      AppIndicator3.IndicatorCategory.APPLICATION_STATUS)
             self.icon.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-            self.icon.set_menu(self.menu)
+            self.icon.set_menu(self.menu)       # StatusNotifier trays open the menu themselves; clicks aren't reported
             self.kind = "appindicator"
 
-    def _xapp_activate(self, _icon, button, _time):
-        if button == 1:
-            self._primary_click()
+    def _mouse(self, button, up):
+        """Report a press or release as Windows does: DOWN, UP, DBLCLK (second press), UP."""
+        import time
+        msgs = self.MSGS.get(button)
+        if msgs is None:
+            return
+        if up:
+            emit({"event": "TrayMouse", "msg": msgs[1]})
+            return
+        now = time.monotonic()
+        dbl_ms = Gtk.Settings.get_default().get_property("gtk-double-click-time") or 400
+        prev_button, prev_time = self.last_press
+        if prev_button == button and (now - prev_time) * 1000 <= dbl_ms:
+            self.last_press = (0, 0.0)
+            emit({"event": "TrayMouse", "msg": msgs[2]})
+        else:
+            self.last_press = (button, now)
+            emit({"event": "TrayMouse", "msg": msgs[0]})
+
+    def _xapp_press(self, _icon, x, y, button, t, pos):
+        self.where = (x, y, button, t, pos)
+        self._mouse(button, False)
+
+    def _xapp_release(self, _icon, x, y, button, t, pos):
+        self.where = (x, y, button, t, pos)
+        self._mouse(button, True)
 
     def _gtk_press(self, _icon, ev):
         from gi.repository import Gdk
-        if ev.button == 1:
-            if ev.type == Gdk.EventType._2BUTTON_PRESS:
-                if self.click_count == 2:
-                    emit({"event": "TrayDefault"})
-            elif ev.type == Gdk.EventType.BUTTON_PRESS and self.click_count == 1:
-                emit({"event": "TrayDefault"})
-        return False
+        if ev.type == Gdk.EventType.BUTTON_PRESS:        # GTK's own 2BUTTON/3BUTTON events are ignored
+            self.where = (0, 0, ev.button, ev.time, 0)
+            self._mouse(ev.button, False)
+        return True
 
-    def _gtk_popup(self, icon, button, time):
-        self.menu.popup(None, None, Gtk.StatusIcon.position_menu, icon, button, time)
+    def _gtk_release(self, _icon, ev):
+        self.where = (0, 0, ev.button, ev.time, 0)
+        self._mouse(ev.button, True)
+        return True
 
-    def _primary_click(self):
+    def _gtk_hover(self, *_):
         import time
         now = time.monotonic()
-        if self.click_count == 1 or now - self._last_click < 0.45:
-            emit({"event": "TrayDefault"})
-            self._last_click = 0
+        if now - self._last_move > 0.2:                   # WM_MOUSEMOVE while the pointer is over the icon
+            self._last_move = now
+            emit({"event": "TrayMouse", "msg": 0x200})
+        return False
+
+    def popup(self):
+        """Show the tray menu at the icon (Menu.Display(false) after WM_RBUTTONUP)."""
+        if self.kind == "appindicator" or not self.menu.get_children():
+            return
+        x, y, button, t, pos = self.where or (0, 0, 3, Gtk.get_current_event_time(), 0)
+        if self.kind == "xapp":
+            self.icon.popup_menu(self.menu, x, y, button, t, pos)
         else:
-            self._last_click = now
+            self.menu.popup(None, None, Gtk.StatusIcon.position_menu, self.icon, button, t)
 
     def set_icon(self, path):
         if self.kind == "xapp":
@@ -2142,6 +2384,8 @@ def tray_op(req):
         tray.click_count = int(req["click_count"])
     if "visible" in req:
         tray.set_visible(bool(req["visible"]))
+    if req.get("popup"):
+        tray.popup()
     return tray.kind
 
 

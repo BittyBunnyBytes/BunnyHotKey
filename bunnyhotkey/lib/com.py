@@ -7,8 +7,9 @@ Emulated: WinHttp.WinHttpRequest.5.1, MSXML2.XMLHTTP / ServerXMLHTTP, Scripting.
 Shell.Application (+ Folder, FolderItem) and WMI through ComObjGet("winmgmts:") (Win32_Process,
 Win32_OperatingSystem, Win32_ComputerSystem, Win32_Processor, Win32_LogicalDisk, Win32_BIOS,
 Win32_NetworkAdapterConfiguration).  ComValue, ComObjArray, ComObjType, ComObjValue, ComObjFlags and ComObjConnect
-work with them.  ComCall, ComObjQuery, ComObjFromPtr and ComObjActive need real COM vtables or the running-object
-table and stay Windows-only.
+work with them.  Each object also has a real native IDispatch (comnative.py), so ComCall, ComObjQuery,
+ComObjFromPtr, ComObjValue and ObjPtr see interface pointers, and ComObjActive reads a running-object table shared by
+Bunny Hot Key processes (rot.py).
 """
 from __future__ import annotations
 
@@ -147,7 +148,7 @@ def _proto_setup():
          set=lambda this, v, *k: this.impl.set(this.impl.default or "Item", list(k), v))
     method(p, "__Enum", lambda this, n=1: _enumerator(this.impl.enum(), n))
     method(p, "Call", lambda this, *a: wrap(this.impl.call(this.impl.default or "Item", list(a))))
-    prop(p, "Ptr", get=lambda this: id(this))
+    prop(p, "Ptr", get=lambda this: _native_ptr(this))
     vp = cv.prototype
     prop(vp, "Value", get=lambda this: getattr(this, "_value", ""),
          set=lambda this, v: (setattr(this, "_value", v), v)[1]) if vp.own("Value") is None else None
@@ -159,6 +160,11 @@ def _proto_setup():
         prop(ap, "__Item", get=lambda this, i: this.items[_index(this, i)],
              set=lambda this, v, i: this.items.__setitem__(_index(this, i), v))
         method(ap, "__Enum", lambda this, n=1: _enumerator(iter(this.items), n))
+
+
+def _native_ptr(obj):
+    from .comnative import object_ptr
+    return object_ptr(obj)
 
 
 def _index(arr, i):
@@ -1798,8 +1804,12 @@ def ComObjType(obj, info=UNSET):
 @export("ComObjValue")
 def ComObjValue(obj):
     if isinstance(obj, ComValueObj):
+        if obj.vt in (VT_DISPATCH, 13) and isinstance(obj.val, AhkObject):
+            return _native_ptr(obj.val)
         return obj.val
-    if isinstance(obj, (ComDispatch, SafeArray)):
+    if isinstance(obj, ComDispatch):
+        return _native_ptr(obj)
+    if isinstance(obj, SafeArray):
         return id(obj)
     throw("TypeError", "Expected a ComValue.", "ComObjValue")
 
@@ -1826,29 +1836,136 @@ def ComObjConnect(obj, sink=UNSET):
 
 
 @export("ComObjActive")
-def ComObjActive(progid):
-    com_error(0x800401E3, "Operation unavailable (the running object table is Windows-only)", S(progid))
+def ComObjActive(clsid):
+    """The object another script (or this one) registered under a CLSID or ProgID with RegisterActiveObject."""
+    from . import rot
+    _proto_setup()
+    return rot.get_active(S(clsid))
+
+
+def _interface_ptr(v, fn):
+    """The interface pointer in a ComObject, an object with a Ptr property, or an integer (ComObjQuery rules)."""
+    from . import comnative as N
+    if isinstance(v, ComValueObj) and v.vt in (VT_DISPATCH, 13):
+        p = v.val if not isinstance(v.val, AhkObject) else N.object_ptr(v.val)
+    elif isinstance(v, ComDispatch):
+        p = N.object_ptr(v)
+    elif isinstance(v, AhkObject):
+        p = rt().to_int(rt().get_prop(v, "Ptr"))
+    else:
+        p = rt().to_int(v)
+    if p < 65536:
+        throw("ValueError", "Parameter #1 of " + fn + " is invalid.", v)
+    return rt().to_int(p)
 
 
 @export("ComObjQuery")
-def ComObjQuery(*a):
-    throw("Error", "ComObjQuery needs real COM interface pointers (Windows-only, not available in Bunny Hot Key).")
+def ComObjQuery(obj, iid_or_sid, iid=UNSET):
+    """QueryInterface (or IServiceProvider::QueryService with three parameters) on any interface pointer."""
+    from . import comnative as N
+    import ctypes
+    _proto_setup()
+    p = _interface_ptr(obj, "ComObjQuery")
+    try:
+        first = N.guid_bytes(S(iid_or_sid))
+        want = N.guid_bytes(S(iid)) if iid is not UNSET else first
+    except ValueError:
+        com_error(0x800401F3, "Invalid class string", S(iid_or_sid if iid is UNSET else iid))
+    if iid is UNSET:
+        hr, out = N.query_interface(p, want)
+    else:
+        hr, prov = N.query_interface(p, N.IID_IServiceProvider)
+        out = 0
+        if prov:
+            box = ctypes.c_void_p(0)
+            s1, s2 = ctypes.create_string_buffer(first, 16), ctypes.create_string_buffer(want, 16)
+            hr = N.vfunc(prov, 3, N.c_hr, [N.P, N.P, N.P])(prov, ctypes.addressof(s1), ctypes.addressof(s2),
+                                                          ctypes.addressof(box)) & 0xFFFFFFFF
+            N.release(prov)
+            out = box.value or 0
+    if out:
+        return ComValueObj(VT_DISPATCH if want == N.IID_IDispatch else 13, out)
+    com_error(hr or 0x80004002, "No such interface supported", "ComObjQuery")
 
 
 @export("ComObjFromPtr")
-def ComObjFromPtr(*a):
-    throw("Error", "ComObjFromPtr needs a real COM interface pointer (Windows-only, not available in Bunny Hot Key).")
+def ComObjFromPtr(ptr):
+    """Wrap an IDispatch pointer, taking ownership of the caller's reference (v2 semantics)."""
+    from . import comnative as N
+    _proto_setup()
+    p = rt().to_int(ptr)
+    if not p:
+        throw("ValueError", "Parameter #1 of ComObjFromPtr is invalid.", ptr)
+    own = N.lookup(p)
+    if own is not None:
+        obj = own._obj() if hasattr(own, "_obj") else None
+        if obj is not None:
+            N.release(p)
+            return obj
+    hr, pdisp = N.query_interface(p, N.IID_IDispatch)
+    if pdisp:
+        N.release(p)
+        p = pdisp
+    return ComDispatch(N.ForeignImpl(p))
+
+
+_COMCALL_RET = {"hresult"}
 
 
 @export("ComCall")
-def ComCall(*a):
-    throw("Error", "ComCall calls COM vtables (Windows-only, not available in Bunny Hot Key).")
+def ComCall(index, obj, *args):
+    """Call method `index` of the interface's vtable, passing the interface pointer first.  The return type
+    defaults to HRESULT, which throws OSError on failure.  "Str" arguments are passed as UTF-16 (OLECHAR*)."""
+    from .dllcall import _split_args, call_address
+    from . import comnative as N
+    i = rt().to_int(index)
+    p = _interface_ptr(obj, "ComCall")
+    pairs, ret = _split_args(args)
+    if len(args) % 2 == 0:
+        ret = "HRESULT"
+    keep, conv = [], [("Ptr", p)]
+    for t, v in pairs:
+        tl = t.lower()
+        if tl in ("str", "wstr"):
+            import ctypes
+            b = ctypes.create_string_buffer(S(v).encode("utf-16-le") + b"\0\0")
+            keep.append(b)
+            conv.append(("Ptr", ctypes.addressof(b)))
+        elif tl in ("ptr", "uptr") and isinstance(v, AhkObject):
+            from .buffer import BufferObj
+            if isinstance(v, BufferObj):
+                conv.append((t, v.addr))
+            elif isinstance(v, (ComDispatch, ComValueObj)):
+                conv.append((t, _interface_ptr(v, "ComCall")))
+            else:
+                conv.append((t, rt().to_int(rt().get_prop(v, "Ptr"))))
+        else:
+            conv.append((t, v))
+    vtbl = N.rd("<Q", p)
+    fp = N.rd("<Q", vtbl + 8 * i)
+    hres = ret.strip().lower() == "hresult"
+    r = call_address(fp, conv, "Int" if hres else ret)
+    if hres:
+        r = int(r) & 0xFFFFFFFF
+        r = r - 0x100000000 if r & 0x80000000 else r
+        if r < 0:
+            com_error(r, _hr_text(r), "ComCall")
+    return r
+
+
+def _hr_text(hr):
+    return {0x80004001: "Not implemented", 0x80004002: "No such interface supported", 0x80004003: "Invalid pointer",
+            0x80004005: "Unspecified error", 0x80070057: "The parameter is incorrect.",
+            0x80020006: "Unknown name.", 0x80020003: "Member not found.",
+            0x80020009: "Exception occurred."}.get(hr & 0xFFFFFFFF, "Call failed.")
 
 
 def setup_classes():
     """ComObject(ProgID), ComValue(VarType, Value) and ComObjArray(VarType, Count) as callable classes."""
     from ..classes import method
+    from .comnative import install_dll_api
     _proto_setup()
+    install_dll_api()
     method(CLASSES["ComObject"], "Call", lambda this, progid, iid=UNSET: com_object(progid, iid))
     method(CLASSES["ComValue"], "Call", lambda this, vt, value="", flags=0:
            ComValueObj(rt().to_int(vt), value, rt().to_int(flags) if flags not in (UNSET, "") else 0))

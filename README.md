@@ -15,14 +15,15 @@
 
 <!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
-**98% of its built-in function API** is reproduced (338 full, 1 partial, 5 missing).
+**100% of its built-in function API** is reproduced (343 full, 1 partial, 0 missing).
 
 **Missing or left to do:**
-- **COM beyond the common automation objects:** WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application and WMI are emulated; other COM servers (Office, UIAutomation, WebView2), `ComCall`/`ComObjQuery`/`ComObjFromPtr`/`ComObjActive` and the Gui ActiveX control need real Windows COM.
+- **Windows COM servers:** objects are real native COM (ComCall, ComObjQuery, ComObjFromPtr, IDispatch both ways, a running-object table shared by BHK scripts), and WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application, WMI and the web browser are emulated; servers that only exist as Windows binaries (Office, UIAutomation, WebView2) aren't available.
 - **Wayland input:** dropped for now.
-- **Other apps' controls:** read, typed into, clicked, checked and chosen through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.
-- **Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
-- **Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`); X11 programs have no Win32 message queue to receive them.
+- **Other apps' controls:** read, typed into, clicked, checked, chosen and sent common Win32 messages through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.
+- **Windows DLLs:** DllCall emulates the common Win32 APIs (user32, kernel32, shell32, ole32/oleaut32) and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
+- **Custom controls of unregistered classes:** `Gui.Add("Custom")` covers the standard Win32 classes plus SysIPAddress32, RichEdit and Scintilla; classes a script registers itself with RegisterClassEx have no Linux equivalent.
+- **Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`), and control messages reach other apps' widgets through AT-SPI; X11 programs have no Win32 message queue for anything else.
 
 The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
 <!-- parity:summary:end -->
@@ -108,7 +109,9 @@ bhk doctor                 # what BHK can use on this machine
   - `Drive*` functions read real mount, label and serial data.
 - **GUI:**
   - MsgBox, InputBox, ToolTip, FileSelect and DirSelect.
-  - `Gui()` with 22 of AutoHotkey's 23 control types: Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, Slider, Progress, GroupBox, Picture, Link, StatusBar and the ActiveX web browser (WebKitGTK, optional). Custom controls host Win32 window classes and can't exist on Linux.
+  - `Gui()` with all 23 of AutoHotkey's control types: Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, Slider, Progress, GroupBox, Picture, Link, StatusBar, the ActiveX web browser (WebKitGTK, optional) and Custom (the standard Win32 classes plus SysIPAddress32, RichEdit and Scintilla).
+  - Win32 control messages (`EM_*`, `LB_*`, `CB_*`, `LVM_*`, `TVM_*`, `PBM_*`, `TBM_*`, `SB_*`, `IPM_*`, `SCI_*`) through SendMessage, and `OnCommand`/`OnNotify`/`OnMessage(WM_COMMAND/WM_NOTIFY)` notifications with Win32's codes.
+  - Native COM: emulated objects and script objects are real IDispatch vtables, so `ComCall`, `ComObjQuery`, `ComObjFromPtr` and `ObjPtr` work on interface pointers; `ComObjActive` reads a running-object table shared by BHK scripts (`RegisterActiveObject`); `SoundGetInterface` returns IAudioEndpointVolume / IAudioMeterInformation over PipeWire.
   - AHK layout options and events, `SetFont`, `BackColor`, control colours, `Gui.Opt` (AlwaysOnTop, -Caption, ToolWindow, Owner, MinSize...), ListView sorting/columns/checkboxes/icons, image lists, `ContextMenu` and `DropFiles`.
   - `Menu` with submenus, radio items, icons and colours, plus `Gui.MenuBar`.
   - `Control*`, `Edit*`, `ListViewGetContent`, `StatusBarGetText`, `WinGetText`, `WinGetControls` and `MenuSelect` work on the script's own Gui windows (by object, Hwnd, ClassNN such as `Edit1`, or text), like on Windows, and on other programs' windows through AT-SPI (e.g. `ControlGetText("Edit1", "ahk_exe gedit")`, `ControlClick("OK", "Save As")`).
@@ -132,7 +135,7 @@ bhk doctor                 # what BHK can use on this machine
 ## Not supported
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
 - **AutoHotkey v1 scripts:** BHK targets v2. A v1 `#Requires` gets a clear message.
-- **Real Windows COM and Windows-only APIs that aren't in the DllCall table.** The common automation objects (`WinHttp.WinHttpRequest.5.1`, `MSXML2.XMLHTTP`, `Scripting.Dictionary`, `WScript.Shell`, `Scripting.FileSystemObject`, `ADODB.Stream`, `SAPI.SpVoice`, `Shell.Application`, WMI via `ComObjGet("winmgmts:")`) are emulated; other COM servers (Office, UIAutomation, WebView2) and `ComCall` need Windows.
+- **COM servers and DLLs that only exist as Windows binaries** (Office, UIAutomation, WebView2, arbitrary `.dll`s). COM itself works natively (`ComCall`, `ComObjQuery`, `ComObjActive` between BHK scripts), the common automation objects (`WinHttp.WinHttpRequest.5.1`, `MSXML2.XMLHTTP`, `Scripting.Dictionary`, `WScript.Shell`, `Scripting.FileSystemObject`, `ADODB.Stream`, `SAPI.SpVoice`, `Shell.Application`, WMI via `ComObjGet("winmgmts:")`) are emulated, and DllCall emulates the common Win32 APIs.
 - **Moving or restyling other programs' controls:** other apps' widgets are read and operated through the accessibility bus (AT-SPI), which has no way to move, hide or restyle them. Apps that don't publish accessibility data (e.g. Qt without `QT_ACCESSIBILITY=1`) stay opaque.
 
 ## Note for agents

@@ -1685,11 +1685,20 @@ WM_CLOSE, WM_SETTEXT, WM_GETTEXTLENGTH, WM_SYSCOMMAND = 0x10, 0x0C, 0x0E, 0x112
 
 def _msg_target(control, t, txt, xt, xx):
     from .guiobj import GUIS
+    from . import atspi_
     if isinstance(control, AhkObject) or (control is not UNSET and S(control) != ""):
+        try:
+            f = _foreign(control, t, txt, xt, xx)       # another program's control (AT-SPI)
+        except Exception:
+            f = None
+        if f is not None:
+            return None, f.hwnd
         c, win = _ctl(control, t, txt, xt, xx)
         return c, win
     if t is UNSET and txt is UNSET:
         throw("TargetError", "Target window not found.")
+    if type(t) is int and atspi_.by_hwnd(t) is not None:
+        return None, t
     if type(t) is int and any(g.wid == t for g in GUIS.values()):
         return None, next(g.xid or g.wid for g in GUIS.values() if g.wid == t)
     return None, _win_arg(t, txt, xt, xx)
@@ -1765,7 +1774,8 @@ def _builtin_message(c, win, msg, wp, lp):
         from .guiobj import ctrl_set_enabled
         ctrl_set_enabled(c, int(bool(wp)))
         return True, 0
-    return False, 0
+    from . import ctlmsg
+    return ctlmsg.handle(c, msg, wp, lp)
 
 
 def _deliver(msg, wp, lp, c, win, sync, timeout=5.0):
@@ -1773,6 +1783,15 @@ def _deliver(msg, wp, lp, c, win, sync, timeout=5.0):
     from .guiobj import gui_for_window
     from . import ipc
     r = rt()
+    if c is None and win:
+        from . import atspi_
+        f = atspi_.by_hwnd(win)
+        if f is not None:                               # another program's control: map the message onto AT-SPI
+            from .ctlmsg import handle_foreign
+            if sync:
+                return handle_foreign(f, msg, wp, lp)
+            r.post(lambda: handle_foreign(f, msg, wp, lp))
+            return 0
     hwnd = c.cid if c is not None else win
     main = bool(win) and win == getattr(r, "script_hwnd", 0) and c is None
     ours = c is not None or gui_for_window(win) is not None or main

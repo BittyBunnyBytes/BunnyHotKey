@@ -1,0 +1,52 @@
+getsel 6 11 1 bravo
+replacesel alpha|BRAVO charlie|delta
+lineindex 0 6 20 -1
+linelength 5 13 0
+linefromchar 0 1 2
+getline 13 BRAVO charlie
+selectall 25
+deselect []
+readonly 1 1
+limit 10 canundo 0 scroll 1 first 0
+cue 1 1 type here
+gettext 5 alpha
+redraw 0
+lb add 3 insert 1 count 5
+lb items Lime Cyan
+lb text 4 4 Blue -1
+lb find 2 0 3 -1
+lb sel 1 0 1 count 2
+lb selitems 2 0 3
+lb unselall 0 selstring-multi -1
+lb delete 4 -1 top 0 0
+lb reset 0 -1
+lb single 1 2 getselcount -1
+cb add 2 insert 0 count 4
+cb text 6 6 Banana -1
+cb find 0 1 3
+cb select 2 Banana 2
+cb delete 3 dropped 0
+cb reset 0
+pbm 20 setpos 20 50 delta 50 55
+pbm range 6553600 200 0 13107200 50
+pbm step 50 40 40 30
+tbm 3 0 10
+tbm 40 5 50 40
+tbm clamp 50
+udm 4 setpos 4 7
+udm range -5 5 5
+hkm 0x643
+hkm +F5 0x174
+lvm count 4 sel 2
+lvm next 1 3 -1 all 2 -1
+lvm colwidth 120 bad 0 visible 1
+lvm delete 1 two 0 all 1 0
+tvm count 4 root 1 child 1 next 1 parent 1 prev 1
+tvm select 1 1 caret 1
+tvm expand 1 1 collapse 1 0
+tvm delete 1 1 all 1 0
+sb parts 1
+sb settext 1 0
+sb gettext 6 middle middle
+sb getparts 3 100 200 -1
+done

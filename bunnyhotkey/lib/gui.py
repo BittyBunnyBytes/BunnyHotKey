@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import sys
 
 from .. import objects as O
@@ -213,21 +214,89 @@ def ToolTip(text=UNSET, x=UNSET, y=UNSET, which=1):
     return ""
 
 
+_traytip = {"id": 0, "replaced": set()}
+NIN_BALLOONSHOW, NIN_BALLOONHIDE, NIN_BALLOONTIMEOUT, NIN_BALLOONUSERCLICK = 0x402, 0x403, 0x404, 0x405
+
+
+def _traytip_opts(options):
+    """TrayTip options: a number (1 info, 2 warning, 3 error, 4 tray icon, 16 mute, 32 large icon) or words
+    (Iconi, Icon!, Iconx, Mute)."""
+    if type(options) is int:
+        return options
+    n = 0
+    for w in S(options).lower().split():
+        if w.lstrip("-").isdigit() or w.startswith("0x"):
+            n |= int(w, 0)
+        else:
+            n |= {"iconi": 1, "icon!": 2, "iconx": 3, "mute": 16}.get(w, 0)
+    return n
+
+
+def _close_notification(nid):
+    if nid and shutil.which("gdbus"):
+        subprocess.Popen(["gdbus", "call", "--session", "--dest", "org.freedesktop.Notifications",
+                          "--object-path", "/org/freedesktop/Notifications",
+                          "--method", "org.freedesktop.Notifications.CloseNotification", str(nid)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _balloon_event(lp):
+    """Balloon notifications reach OnMessage(0x404) as on Windows (lParam NIN_BALLOON*)."""
+    from . import tray
+    rt().post(lambda: tray.on_mouse(lp))
+
+
 @export()
 def TrayTip(text="", title="", options=0):
+    """A desktop notification standing in for the tray balloon.  TrayTip() with no text hides it; showing, clicking,
+    expiring and hiding are reported to OnMessage(0x404) handlers as NIN_BALLOONSHOW/USERCLICK/TIMEOUT/HIDE."""
     t, ttl = S(text), S(title)
     if not t and not ttl:
+        nid = _traytip["id"]
+        if nid:
+            _traytip["replaced"].add(nid)
+            _close_notification(nid)
+            _traytip["id"] = 0
+            _balloon_event(NIN_BALLOONHIDE)
         return ""
-    if shutil.which("notify-send"):
-        o = options if type(options) is int else 0
-        icon = {1: "dialog-information", 2: "dialog-warning", 3: "dialog-error"}.get(o & 3, "")
-        argv = ["notify-send", "-a", rt().bivars["a_scriptname"][0]()]
-        if icon:
-            argv += ["-i", icon]
-        argv += [ttl or t, t if ttl else ""]
-        subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    else:
+    if not shutil.which("notify-send"):
         print(f"[TrayTip] {ttl}: {t}", file=sys.stderr)
+        return ""
+    o = _traytip_opts(options)
+    icon = {1: "dialog-information", 2: "dialog-warning", 3: "dialog-error"}.get(o & 3, "")
+    if o & 4:
+        from . import tray
+        icon = tray._icon_path()
+    argv = ["notify-send", "-a", rt().bivars["a_scriptname"][0](), "-p", "-w", "-A", "default=Open"]
+    if icon:
+        argv += ["-i", icon]
+    if o & 16:
+        argv += ["-h", "boolean:suppress-sound:true"]
+    prev = _traytip["id"]
+    if prev:
+        _traytip["replaced"].add(prev)
+        argv += ["-r", str(prev)]
+    argv += [ttl or t, t if ttl else ""]
+    try:
+        p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    except OSError:
+        return ""
+
+    def watch():
+        first = p.stdout.readline().strip()
+        nid = int(first) if first.isdigit() else 0
+        _traytip["id"] = nid
+        _traytip["replaced"].discard(nid)
+        _balloon_event(NIN_BALLOONSHOW)
+        action = p.stdout.readline().strip()
+        p.wait()
+        if action == "default":
+            _balloon_event(NIN_BALLOONUSERCLICK)
+        elif nid not in _traytip["replaced"]:
+            _balloon_event(NIN_BALLOONTIMEOUT)
+        if _traytip["id"] == nid:
+            _traytip["id"] = 0
+    threading.Thread(target=watch, daemon=True).start()
     return ""
 
 

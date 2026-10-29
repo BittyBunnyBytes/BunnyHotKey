@@ -2,28 +2,89 @@
   "_help": "Edit this file, then run: python3 tools/parity_chart.py  (redraws assets/parity.svg and the summaries in README.md and docs/PARITY.md). Areas with \"measure\" are computed automatically; the others use \"percent\". Order here = order in the chart.",
   "title": "Bunny Hot Key - parity with AutoHotkey v2",
   "subtitle": "Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md",
-  "corpus": {"loaded": 327, "total": 337, "repos": 7},
+  "corpus": {
+    "loaded": 327,
+    "total": 337,
+    "repos": 7
+  },
   "areas": [
-    {"area": "Language syntax & semantics (v2.0)", "percent": 99, "note": "all v2.0 constructs; regression suite"},
-    {"area": "Real-world v2 scripts that load", "measure": "corpus", "note": "{loaded} of {total} from {repos} repos (rest: v1 files)"},
-    {"area": "Strings / RegEx / Math / Dates", "measure": "builtins:strings", "note": "{full} of {count} functions"},
-    {"area": "Keyboard & mouse functions", "measure": "builtins:input", "note": "Send, Click, Hotkey(), InputHook..."},
-    {"area": "Process / Run / System", "measure": "builtins:process", "note": "Run, Process*, Env*, Sound*, Reg*, monitors"},
-    {"area": "Files / Dirs / INI", "measure": "builtins:files", "note": "Drive* read real mount metadata"},
-    {"area": "Window functions (Win*)", "measure": "builtins:window", "note": "EWMH + X Shape (regions, TransColor)"},
-    {"area": "Tray icon & menu", "percent": 98, "note": "submenus, icons; XFCE, Cinnamon"},
-    {"area": "Hotkeys & hotstrings (X11)", "percent": 99, "note": "SendLevel rules, bare modifiers, end keys"},
-    {"area": "All built-in functions", "measure": "builtins:all", "note": "{full} full, {partial} partial, {missing} missing"},
-    {"area": "Gui", "percent": 96, "note": "22 of 23 control types"},
-    {"area": "Win32 controls (Control*, Edit*)", "note": "own Gui + other apps via AT-SPI", "percent": 90},
-    {"area": "COM / ActiveX", "percent": 45, "note": "common automation objects emulated"},
-    {"area": "Wayland input", "percent": 0, "note": "dropped for now"}
+    {
+      "area": "Language syntax & semantics (v2.0)",
+      "percent": 99,
+      "note": "all v2.0 constructs; regression suite"
+    },
+    {
+      "area": "Real-world v2 scripts that load",
+      "measure": "corpus",
+      "note": "{loaded} of {total} from {repos} repos (rest: v1 files)"
+    },
+    {
+      "area": "Strings / RegEx / Math / Dates",
+      "measure": "builtins:strings",
+      "note": "{full} of {count} functions"
+    },
+    {
+      "area": "Keyboard & mouse functions",
+      "measure": "builtins:input",
+      "note": "Send, Click, Hotkey(), InputHook..."
+    },
+    {
+      "area": "Process / Run / System",
+      "measure": "builtins:process",
+      "note": "Run, Process*, Env*, Sound*, Reg*, monitors"
+    },
+    {
+      "area": "Files / Dirs / INI",
+      "measure": "builtins:files",
+      "note": "Drive* read real mount metadata"
+    },
+    {
+      "area": "Window functions (Win*)",
+      "measure": "builtins:window",
+      "note": "EWMH + X Shape (regions, TransColor)"
+    },
+    {
+      "area": "Tray icon & menu",
+      "percent": 99,
+      "note": "AHK_NOTIFYICON clicks, balloons; XFCE, Cinnamon"
+    },
+    {
+      "area": "Hotkeys & hotstrings (X11)",
+      "percent": 99,
+      "note": "SendLevel rules, bare modifiers, end keys"
+    },
+    {
+      "area": "All built-in functions",
+      "measure": "builtins:all",
+      "note": "{full} full, {partial} partial, {missing} missing"
+    },
+    {
+      "area": "Gui",
+      "percent": 98,
+      "note": "23 of 23 control types (Custom: Win32 classes)"
+    },
+    {
+      "area": "Win32 controls (Control*, Edit*)",
+      "note": "Win32 messages, OnNotify/OnCommand; other apps via AT-SPI",
+      "percent": 96
+    },
+    {
+      "area": "COM / ActiveX",
+      "percent": 75,
+      "note": "native vtables, ComCall, ROT; emulated servers"
+    },
+    {
+      "area": "Wayland input",
+      "percent": 0,
+      "note": "dropped for now"
+    }
   ],
   "missing": [
-    "**COM beyond the common automation objects:** WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application and WMI are emulated; other COM servers (Office, UIAutomation, WebView2), `ComCall`/`ComObjQuery`/`ComObjFromPtr`/`ComObjActive` and the Gui ActiveX control need real Windows COM.",
+    "**Windows COM servers:** objects are real native COM (ComCall, ComObjQuery, ComObjFromPtr, IDispatch both ways, a running-object table shared by BHK scripts), and WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application, WMI and the web browser are emulated; servers that only exist as Windows binaries (Office, UIAutomation, WebView2) aren't available.",
     "**Wayland input:** dropped for now.",
-    "**Other apps' controls:** read, typed into, clicked, checked and chosen through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.",
-    "**Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.",
-    "**Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`); X11 programs have no Win32 message queue to receive them."
+    "**Other apps' controls:** read, typed into, clicked, checked, chosen and sent common Win32 messages through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.",
+    "**Windows DLLs:** DllCall emulates the common Win32 APIs (user32, kernel32, shell32, ole32/oleaut32) and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.",
+    "**Custom controls of unregistered classes:** `Gui.Add(\"Custom\")` covers the standard Win32 classes plus SysIPAddress32, RichEdit and Scintilla; classes a script registers itself with RegisterClassEx have no Linux equivalent.",
+    "**Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`), and control messages reach other apps' widgets through AT-SPI; X11 programs have no Win32 message queue for anything else."
   ]
 }

@@ -308,36 +308,32 @@ def ObjBindMethod(obj, name=UNSET, *args):
     return BoundFunc(lf, list(args))
 
 
-# Object addresses: ObjPtr gives each object a stable address; ObjFromPtr maps it back.  References counted with
-# ObjAddRef/ObjPtrAddRef keep the object alive until released, as in AutoHotkey (counts start at 1 for the
-# reference the script holds, since Python does the real reference counting).
-import weakref as _weakref
-_PTRS = _weakref.WeakValueDictionary()
-_STRONG: dict[int, list] = {}
-
-
+# Object addresses: an object's address is its native IDispatch (comnative), as in AutoHotkey, so the same pointer
+# works with ObjFromPtr, ComObjFromPtr, ComCall and native code.  ObjAddRef/ObjRelease call the interface's
+# AddRef/Release; references counted that way keep the object alive until released (counts include the reference
+# the script holds, since Python does the real reference counting).
 def _obj_arg(obj, fn):
     if not isinstance(obj, AhkObject):
         throw("TypeError", O.type_error_msg("Object", obj), fn)
-    _PTRS[id(obj)] = obj
-    return id(obj)
+    from .comnative import object_ptr
+    return object_ptr(obj)
+
+
+def _ptr_arg(ptr, fn):
+    p = O.RT.to_int(ptr)
+    if p < 65536:
+        throw("ValueError", "Invalid object pointer.", fn)
+    return p
 
 
 def _from_ptr(ptr, fn):
-    p = O.RT.to_int(ptr)
-    obj = _PTRS.get(p) or (_STRONG.get(p) or [None])[0]
+    from .comnative import lookup
+    p = _ptr_arg(ptr, fn)
+    n = lookup(p)
+    obj = n._obj() if n is not None and hasattr(n, "_obj") else None
     if obj is None:
         throw("ValueError", "Invalid object pointer.", fn)
     return p, obj
-
-
-def _addref(p, obj, n=1):
-    ent = _STRONG.setdefault(p, [obj, 0])
-    ent[1] += n
-    if ent[1] <= 0:
-        del _STRONG[p]
-        return 1
-    return ent[1] + 1
 
 
 @export()
@@ -347,16 +343,17 @@ def ObjPtr(obj):
 
 @export()
 def ObjPtrAddRef(obj):
+    from .comnative import addref
     p = _obj_arg(obj, "ObjPtrAddRef")
-    _addref(p, obj)
+    addref(p)
     return p
 
 
 @export()
 def ObjFromPtr(ptr):
+    from .comnative import release
     p, obj = _from_ptr(ptr, "ObjFromPtr")
-    if p in _STRONG:
-        _addref(p, obj, -1)       # takes ownership of one counted reference
+    release(p)            # takes ownership of one counted reference
     return obj
 
 
@@ -367,14 +364,14 @@ def ObjFromPtrAddRef(ptr):
 
 @export()
 def ObjAddRef(ptr):
-    p, obj = _from_ptr(ptr, "ObjAddRef")
-    return _addref(p, obj)
+    from .comnative import addref
+    return addref(_ptr_arg(ptr, "ObjAddRef"))
 
 
 @export()
 def ObjRelease(ptr):
-    p, obj = _from_ptr(ptr, "ObjRelease")
-    return _addref(p, obj, -1)
+    from .comnative import release
+    return release(_ptr_arg(ptr, "ObjRelease"))
 
 
 @export()

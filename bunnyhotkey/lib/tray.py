@@ -159,9 +159,39 @@ def refresh():
         show()
 
 
+AHK_NOTIFYICON = 0x404          # WM_USER + 4: uCallbackMessage and uID of the tray icon (script.cpp)
+WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_RBUTTONUP = 0x201, 0x203, 0x205
+
+
+def on_mouse(lp):
+    """A click on the icon, in the script thread.  OnMessage(0x404) handlers see it first (wParam 1028, lParam the
+    mouse message) and a non-blank return stops the default action; then MainWindowProc's AHK_NOTIFYICON case:
+    the default item on a double-click (or single click with ClickCount 1), the menu on right-button-up."""
+    from .flow import message_handlers
+    r = rt()
+    for fn in message_handlers(AHK_NOTIFYICON):
+        res = r.call(fn, [AHK_NOTIFYICON, lp, AHK_NOTIFYICON, getattr(r, "script_hwnd", 0)])
+        if res != "" and res is not None:
+            return
+    m = menu()
+    if lp == WM_LBUTTONDOWN and m.click_count != 1:
+        return
+    if lp in (WM_LBUTTONDOWN, WM_LBUTTONDBLCLK):
+        if m.default:
+            it = m.find_item(m.default, required=False)
+            if it is not None:
+                m.activate(m.items.index(it))
+    elif lp == WM_RBUTTONUP:
+        _sync_checks(m)
+        from .guiobj import _srv, menu_tree
+        _srv().call("tray", items=menu_tree(m), popup=True)
+
+
 def on_event(msg):
     m = menu()
-    if msg["event"] == "TrayItem":
+    if msg["event"] == "TrayMouse":
+        rt().post(lambda: on_mouse(int(msg["msg"])))
+    elif msg["event"] == "TrayItem":
         m.activate(msg["index"])
     elif msg["event"] == "TrayDefault" and m.default:
         it = m.find_item(m.default, required=False)

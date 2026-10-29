@@ -210,7 +210,7 @@ class Foreign:
     def items(self):
         if self.role in ("table", "tree table"):
             return ["\t".join(row) for row in self.table_rows()]
-        return [n.get_name() or "" for n in self.item_nodes()]
+        return [_node_name(n) for n in self.item_nodes()]
 
     def index(self):
         names = self.items()
@@ -256,6 +256,75 @@ class Foreign:
     def n_columns(self):
         return Atspi().Table.get_n_columns(self.acc) if "Table" in _ifaces(self.acc) else 0
 
+    def n_rows(self):
+        return Atspi().Table.get_n_rows(self.acc) if "Table" in _ifaces(self.acc) else 0
+
+    def selected_rows(self):
+        A = Atspi()
+        if "Table" not in _ifaces(self.acc):
+            return []
+        return [r for r in range(A.Table.get_n_rows(self.acc)) if A.Table.is_row_selected(self.acc, r)]
+
+    # ---- text selection (character offsets)
+    def sel(self):
+        A = Atspi()
+        if "Text" not in _ifaces(self.acc):
+            return 0, 0
+        if A.Text.get_n_selections(self.acc) > 0:
+            r = A.Text.get_selection(self.acc, 0)
+            if r.end_offset > r.start_offset:
+                return r.start_offset, r.end_offset
+        off = max(A.Text.get_caret_offset(self.acc), 0)
+        return off, off
+
+    def set_sel(self, start, end):
+        """Select [start, end) and put the caret at end; start=-1 removes the selection."""
+        A = Atspi()
+        a = self.acc
+        if "Text" not in _ifaces(a):
+            return False
+        if start < 0:
+            for i in reversed(range(A.Text.get_n_selections(a))):
+                A.Text.remove_selection(a, i)
+            return True
+        A.Text.set_caret_offset(a, end)
+        if start == end:
+            return True
+        if A.Text.get_n_selections(a) > 0:
+            return bool(A.Text.set_selection(a, 0, start, end))
+        return bool(A.Text.add_selection(a, start, end))
+
+    def replace_sel(self, s):
+        A = Atspi()
+        a = self.acc
+        if "EditableText" not in _ifaces(a):
+            return False
+        start, end = self.sel()
+        if end > start:
+            A.EditableText.delete_text(a, start, end)
+        ok = A.EditableText.insert_text(a, start, s, len(s.encode("utf-8")))
+        A.Text.set_caret_offset(a, start + len(s))
+        return bool(ok)
+
+    # ---- the Value interface (sliders, progress bars, spin buttons)
+    def has_value(self):
+        return "Value" in _ifaces(self.acc)
+
+    def value(self):
+        return Atspi().Value.get_current_value(self.acc) if self.has_value() else 0
+
+    def value_range(self):
+        A = Atspi()
+        if not self.has_value():
+            return 0, 0
+        return A.Value.get_minimum_value(self.acc), A.Value.get_maximum_value(self.acc)
+
+    def set_value(self, v):
+        if not self.has_value():
+            return False
+        lo, hi = self.value_range()
+        return bool(Atspi().Value.set_current_value(self.acc, float(max(lo, min(v, hi)))))
+
 
 def _children(acc):
     out = []
@@ -267,6 +336,14 @@ def _children(acc):
     except Exception:
         pass
     return out
+
+
+def _node_name(acc):
+    """An item's name; rows that hold their text in a child label (GtkListBox) get that label's name."""
+    n = acc.get_name() or ""
+    if not n:
+        n = next((c.get_name() for c in _descendants(acc, 2) if c.get_name()), "")
+    return n
 
 
 def _descendants(acc, depth):

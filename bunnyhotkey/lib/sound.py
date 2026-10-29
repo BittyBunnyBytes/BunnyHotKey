@@ -193,5 +193,22 @@ def SoundGetName(component="", device=""):
 
 
 @export()
-def SoundGetInterface(*a):
-    throw("Error", "SoundGetInterface returns a Windows COM interface (Windows-only, not available in Bunny Hot Key).")
+def SoundGetInterface(iid, component="", device=""):
+    """A Core Audio interface of the device (Component omitted) or of its master component (IAudioVolumeLevel,
+    IAudioMute), implemented over PulseAudio/PipeWire (coreaudio.py).  Returns the pointer, or 0 if unsupported."""
+    from . import coreaudio
+    from .comnative import guid_bytes
+    i = S(iid).strip()
+    try:
+        if not i.startswith("{"):
+            raise ValueError
+        g = guid_bytes(i)
+    except ValueError:
+        throw("ValueError", "Parameter #1 of SoundGetInterface is invalid.", i)
+    has_component = component not in (UNSET, "", None)
+    if has_component:
+        _component(component)
+    d = _device(device)
+    if d is None:
+        throw("TargetError", "Device not found.", S(device) if device not in (UNSET, None) else "")
+    return coreaudio.get_interface(g, coreaudio.Endpoint(d[0], d[1]), has_component)

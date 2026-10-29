@@ -1,0 +1,39 @@
+move 1122334455667788
+fill 1122334455ABABAB
+zero 0
+memcpy 1 55667788
+lstrlen 5 7 3
+muldiv 8 -3 -1 -1
+computer small 0 111 1
+computer 1 1 1
+user 1 1 1
+temp 1 1
+cmdline 1
+getenv carrot 7
+getenv 6 carrot
+expand 19 acarrotb%NOPE_XYZ%
+unset 0 203 []
+localtime 1 1 1 1
+systime 1
+ft2st 1
+ft2st 2022 6 6 18 4 26 40 123 
+closehandle 1
+pseudo 1 1 21
+pseudo missing 0 127
+loaddll 0 126
+libm 1 1 1.0
+libm missing 0 127
+free 1 0 126
+modself 1
+find 1 0
+findex 1 1
+class 4 Edit 1
+pid 1 1
+parent 1 1 0
+style 1 1
+iswin 1 0 0
+clientrect 0 0 1
+windowrect 1 1
+badwin 0 1400
+showctl 1 0 0 1
+done

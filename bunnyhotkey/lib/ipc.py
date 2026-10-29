@@ -128,6 +128,9 @@ def _serve(conn):
         if not line:
             return
         req = json.loads(line)
+        if "com" in req:
+            _serve_com(f, req["com"])
+            return
         done = threading.Event()
         box = {"result": 0}
 
@@ -142,6 +145,30 @@ def _serve(conn):
             res = box["result"]
             f.write((json.dumps({"result": res if isinstance(res, (int, float)) else str(res)}) + "\n").encode())
             f.flush()
+
+
+def _serve_com(f, body):
+    """A member call on an object this script exported (rot.py).  Runs as a synchronous call in the script thread
+    (post_sync), which a script waiting on its own remote call still services, so calls may nest both ways."""
+    from . import rot
+    done = threading.Event()
+    box = {}
+
+    def run():
+        try:
+            box["reply"] = rot.serve(body)
+        except BaseException as e:      # noqa: BLE001 - the reply must always be written
+            box["reply"] = {"error": str(e) or type(e).__name__, "type": "Error"}
+        finally:
+            done.set()
+    rt().post_sync(run)
+    done.wait(30.0)
+    reply = box.get("reply", {"error": "Timeout.", "type": "TimeoutError"})
+    try:
+        f.write((json.dumps(reply) + "\n").encode())
+        f.flush()
+    except OSError:
+        pass
 
 
 def receive(req):
