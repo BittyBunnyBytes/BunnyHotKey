@@ -39,6 +39,9 @@ class Compiler:
         self.pending_bases = []
         self.hot_items = []       # (kind, node, ctx, compiled) in source order
         self.directive_items = []
+        # AutoHotkey v1: functions live in their own namespace, so variables may share their names.
+        self.v1 = getattr(rt, "script_version", "2") == "1"
+        self.builtin_consts = {k for k, c in rt.globals.items() if c.scope == "const" and not k.startswith("__v1_")}
 
     # ================================================================== program
     def compile_program(self, stmts: list[A.Node]):
@@ -67,6 +70,12 @@ class Compiler:
             if key in rt.consts:
                 raise AhkSyntaxError("Duplicate function definition.", fd.file, fd.line, fd.name)
             cf = CompiledFunc(rt, fd.name)
+            if self.v1:
+                if key in rt.v1_funcs:
+                    raise AhkSyntaxError("Duplicate function definition.", fd.file, fd.line, fd.name)
+                rt.v1_funcs[key] = Cell(fd.name, UserFunc(cf), "const")
+                compiled.append((fd, cf))
+                continue
             cell = self._gcell(fd.name)
             cell.value = UserFunc(cf)
             cell.scope = "const"
@@ -137,6 +146,11 @@ class Compiler:
 
     def _gcell(self, name) -> Cell:
         key = name.lower()
+        if self.v1 and key in self.builtin_consts:
+            c = self.rt.v1_shadow.get(key)
+            if c is None:
+                c = self.rt.v1_shadow[key] = Cell(name, UNSET, "global")
+            return c
         c = self.rt.globals.get(key)
         if c is None:
             c = Cell(name, UNSET, "global")
@@ -208,6 +222,9 @@ class Compiler:
             sub = CompiledFunc(self.rt, s.name)
             cf.nested_inits.append((slot, sub, None))
         body = self.compile_block(fd.body.body, scope, func_body=True)
+        if self.v1:
+            cf.dyn_find = self.dyn_resolver(scope)
+            cf.assume_global = scope.assume_global
         cf.nlocals = len(scope.local_names)
         cf.local_names = list(scope.local_names)
         cf.body = body
@@ -224,6 +241,8 @@ class Compiler:
 
     # ================================================================== name resolution
     def resolve(self, name: str, scope: Scope):
+        if self.v1:
+            return self.resolve_v1(name, scope)
         key = name.lower()
         rt = self.rt
         if key.startswith("a_") and key in rt.bivars:
@@ -249,6 +268,32 @@ class Compiler:
             return ("const", rt.builtins[key])
         if scope.assume_global:
             return ("global", self._gcell(name))
+        return ("local", scope.add_local(name))
+
+    def resolve_v1(self, name, scope):
+        """v1 scoping: functions see globals only when declared (or super-global / assume-global)."""
+        key = name.lower()
+        rt = self.rt
+        if key in rt.bivars and (key.startswith("a_") or key in rt.v1_bivar_names):
+            return ("bivar", key)
+        if scope.kind == "global":
+            return ("global", self._gcell(name))
+        if key in scope.declared_global:
+            return ("global", self._gcell(name))
+        if key in scope.statics:
+            return ("static", scope.statics[key])
+        if key in scope.locals:
+            return ("local", scope.locals[key])
+        idx = scope.capture(key)
+        if idx is not None:
+            return ("free", idx)
+        if key in rt.v1_superglobals or scope.assume_global:
+            return ("global", self._gcell(name))
+        c = rt.globals.get(key)
+        if c is not None and c.scope == "const" and key not in self.builtin_consts:
+            return ("global", c)       # class names are super-global in v1
+        if key in ("this", "super"):
+            return ("local", scope.add_local(name))
         return ("local", scope.add_local(name))
 
     def var_getter(self, name, scope, maybe=False):
@@ -369,6 +414,8 @@ class Compiler:
         rt = self.rt
         local_map = scope.locals if scope.kind == "func" else None
         captures = scope.captures if scope.kind == "func" else None
+        v1 = self.v1
+        compiler = self
 
         def find(f, name):
             key = name.lower()
@@ -386,6 +433,14 @@ class Compiler:
                     return f.cells[local_map[key]]
                 if key in captures:
                     return f.free[captures[key]]
+            if v1:
+                dyn = getattr(f, "dyn", None) if f is not None else None
+                if dyn and key in dyn:
+                    return dyn[key]
+                c = compiler._gcell(name) if key in rt.globals or key in rt.v1_shadow else None
+                if local_map is not None and not scope.assume_global and key not in rt.v1_superglobals:
+                    return c if c is not None and c.value is not UNSET else None
+                return c
             c = rt.globals.get(key)
             if c is not None:
                 return c
@@ -393,7 +448,17 @@ class Compiler:
                 return Cell(name, rt.builtins[key], "const")
             throw("Error", "Variable not found.", name) if False else None
             return None
+        find.create = lambda f, name: compiler._v1_create(f, name, scope)
         return find
+
+    def _v1_create(self, f, name, scope):
+        """A v1 dynamic reference to a variable that doesn't exist yet creates it."""
+        if scope.kind == "func" and not scope.assume_global and f is not None:
+            if f.dyn is None:
+                f.dyn = {}
+            c = f.dyn[name.lower()] = Cell(name, UNSET, "local")
+            return c
+        return self._gcell(name)
 
     # ================================================================== expressions
     def compile_expr(self, e: A.Node, scope: Scope):
@@ -424,6 +489,21 @@ class Compiler:
         name_fn = self._dyn_name(e.parts, scope)
         find = self.dyn_resolver(scope)
         rt = self.rt
+
+        if self.v1:
+            noenv = rt.v1_noenv
+
+            def g1(f):
+                name = name_fn(f)
+                c = find(f, name)
+                v = c.value if c is not None else UNSET
+                if v is UNSET:
+                    if not noenv:
+                        import os
+                        return os.environ.get(name, "")
+                    return ""
+                return v
+            return g1
 
         def g(f):
             name = name_fn(f)
@@ -556,6 +636,22 @@ class Compiler:
     def e_Call(self, e, scope):
         rt = self.rt
         args = self.compile_args(e.args, scope, e.variadic)
+        if self.v1 and isinstance(e.func, A.Var):
+            key = e.func.name.lower()
+            cell = rt.v1_funcs.get(key)
+            if cell is not None:
+                return lambda f: cell.value.call(args(f))
+            if key in rt.builtins:
+                call = rt.builtins[key].call
+                return lambda f: call(args(f))
+            c = rt.globals.get(key)
+            if c is not None and c.scope == "const":
+                return lambda f: rt.call(c.value, args(f))
+            name = e.func.name
+
+            def late(f):
+                return rt.call(rt.v1_lookup_func(name, True), args(f))
+            return late
         if isinstance(e.func, A.Var):
             kind, ref = self.resolve(e.func.name, scope)
             if kind == "const":
@@ -762,7 +858,7 @@ class Compiler:
                 name = nm(f)
                 c = find(f, name)
                 if c is None:
-                    c = self._gcell(name)
+                    c = find.create(f, name) if self.v1 else self._gcell(name)
                 return VarRef(c)
             return dref
         raise AhkSyntaxError("Invalid use of &", e.file, e.line)
@@ -861,6 +957,8 @@ class Compiler:
             def cellf(f):
                 name = nm(f)
                 c = find(f, name)
+                if c is None and compiler.v1:
+                    return find.create(f, name)
                 if c is None:
                     if scope.kind == "global":
                         c = compiler._gcell(name)
@@ -1076,6 +1174,21 @@ class Compiler:
             fn = self.compile_stmt(s, scope)
             if fn is not None:
                 compiled.append(fn)
+        if labels and self.v1:
+            items = compiled
+            if top_level:
+                rt.v1_block = (items, labels)
+                rt.v1_block_labels = labels
+            stack = rt.v1_local_labels
+
+            def run_v1_labels(f):
+                entry = (items, labels, f)
+                stack.append(entry)
+                try:
+                    rt.v1_run_from(items, labels, 0, f, catch_return=False)
+                finally:
+                    stack.pop()
+            return run_v1_labels
         if labels:
             items = compiled
 

@@ -13,7 +13,7 @@ Result: **343 full, 1 partial, 0 missing (100%)** of 344 built-ins.
 <!-- parity:counts:end -->
 - **Language:** the regression suite (`tests/run.py`), with expected outputs
   checked line by line against the C++ source, plus 337 real-world scripts
-  (`docs/COMPATIBILITY.md`): **327 of 337 load**; the rest are v1 files or templates.
+  (`docs/COMPATIBILITY.md`): **332 of 337 load** (5 of them v1 files, through the v1 frontend); the rest are templates, fragments or have missing includes.
 - **Other areas:** feature lists from AutoHotkey's documentation, with each
   feature counted as full, partial or missing.
 - **Updating the chart:** edit `docs/parity.json` (areas, notes, hand-scored

@@ -22,7 +22,7 @@ def setref(ref, value):
 def register_all(rt):
     from ..classes import bif
     from . import (buffer, clipboard, com, core, datetime_, dllcall, files, flow, gui, input_, loops, math_, misc,
-                   process, regex, registry, sound, strings, vars_, window)
+                   process, regex, registry, sound, strings, v1, v1gui, vars_, window)
     for name, fn, byref in EXPORTS:
         rt.builtins[name.lower()] = bif(name, fn, byref)
     vars_.register_vars(rt)

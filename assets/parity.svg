@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="920" height="698" viewBox="0 0 920 698" font-family="Segoe UI, Helvetica, Arial, sans-serif">
-<rect width="920" height="698" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="728" viewBox="0 0 920 728" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="920" height="728" rx="12" fill="#ffffff" stroke="#d0d7de"/>
 <text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">Bunny Hot Key - parity with AutoHotkey v2 and v1</text>
 <text x="20" y="56" font-size="12.5" fill="#59636e">Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md</text>
 <text x="20" y="89" font-size="13" fill="#1f2328">Language syntax &amp; semantics (v2.0)</text>
@@ -9,9 +9,9 @@
 <text x="685" y="89" font-size="11.5" fill="#59636e">all v2.0 constructs; regression suite</text>
 <text x="20" y="119" font-size="13" fill="#1f2328">Real-world v2 scripts that load</text>
 <rect x="300" y="107" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="107" width="320.1" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="119" font-size="13" font-weight="700" fill="#2da44e">97%</text>
-<text x="685" y="119" font-size="11.5" fill="#59636e">327 of 337 from 7 repos (rest: v1 files)</text>
+<rect x="300" y="107" width="326.7" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="119" font-size="13" font-weight="700" fill="#2da44e">99%</text>
+<text x="685" y="119" font-size="11.5" fill="#59636e">332 of 337 from 7 repos (5 v1 files run too)</text>
 <text x="20" y="149" font-size="13" fill="#1f2328">Strings / RegEx / Math / Dates</text>
 <rect x="300" y="137" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="137" width="330.0" height="16" rx="4" fill="#2da44e"/>
@@ -80,23 +80,28 @@
 <text x="685" y="539" font-size="11.5" fill="#59636e">6 of 6 hotkey scripts (game macros)</text>
 <text x="20" y="569" font-size="13" fill="#1f2328">v1 hotkey syntax &amp; #If directives</text>
 <rect x="300" y="557" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="557" width="280.5" height="16" rx="4" fill="#d4a72c"/>
-<text x="640" y="569" font-size="13" font-weight="700" fill="#d4a72c">85%</text>
-<text x="685" y="569" font-size="11.5" fill="#59636e">unbraced bodies, remaps, #If, #IfWin*</text>
+<rect x="300" y="557" width="313.5" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="569" font-size="13" font-weight="700" fill="#2da44e">95%</text>
+<text x="685" y="569" font-size="11.5" fill="#59636e">unbraced bodies, labels, remaps, #If*</text>
 <text x="20" y="599" font-size="13" fill="#1f2328">v1 commands (comma syntax)</text>
 <rect x="300" y="587" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="587" width="52.8" height="16" rx="4" fill="#cf222e"/>
-<text x="640" y="599" font-size="13" font-weight="700" fill="#cf222e">16%</text>
-<text x="685" y="599" font-size="11.5" fill="#59636e">30 of 186: Send*, Mouse*, Win* waits</text>
+<rect x="300" y="587" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="599" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="599" font-size="11.5" fill="#59636e">186 of 186: all v1.1 commands</text>
 <text x="20" y="629" font-size="13" fill="#1f2328">v1 language (If var =, Gosub, objects)</text>
 <rect x="300" y="617" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="617" width="115.5" height="16" rx="4" fill="#cf222e"/>
-<text x="640" y="629" font-size="13" font-weight="700" fill="#cf222e">35%</text>
-<text x="685" y="629" font-size="11.5" fill="#59636e">= and %var% work; legacy If/Gosub don't</text>
-<rect x="20" y="661" width="12" height="12" rx="3" fill="#2da44e"/>
-<text x="38" y="672" font-size="12" fill="#1f2328">90%+ complete</text>
-<rect x="210" y="661" width="12" height="12" rx="3" fill="#d4a72c"/>
-<text x="228" y="672" font-size="12" fill="#1f2328">partial: 60-89%</text>
-<rect x="400" y="661" width="12" height="12" rx="3" fill="#cf222e"/>
-<text x="418" y="672" font-size="12" fill="#1f2328">missing / left to do</text>
+<rect x="300" y="617" width="280.5" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="629" font-size="13" font-weight="700" fill="#d4a72c">85%</text>
+<text x="685" y="629" font-size="11.5" fill="#59636e">legacy If, Gosub/Goto, ErrorLevel, classes</text>
+<text x="20" y="659" font-size="13" fill="#1f2328">v1 Gui (Gui, GuiControl, LV_/TV_/SB_)</text>
+<rect x="300" y="647" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="647" width="247.5" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="659" font-size="13" font-weight="700" fill="#d4a72c">75%</text>
+<text x="685" y="659" font-size="11.5" fill="#59636e">g-labels, v-vars, Submit, ListView/TreeView</text>
+<rect x="20" y="691" width="12" height="12" rx="3" fill="#2da44e"/>
+<text x="38" y="702" font-size="12" fill="#1f2328">90%+ complete</text>
+<rect x="210" y="691" width="12" height="12" rx="3" fill="#d4a72c"/>
+<text x="228" y="702" font-size="12" fill="#1f2328">partial: 60-89%</text>
+<rect x="400" y="691" width="12" height="12" rx="3" fill="#cf222e"/>
+<text x="418" y="702" font-size="12" fill="#1f2328">missing / left to do</text>
 </svg>

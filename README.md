@@ -16,7 +16,7 @@
 <!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
 **100% of its built-in function API** is reproduced (343 full, 1 partial, 0 missing).
-**AutoHotkey v1:** common hotkey scripts run through a compatibility frontend (100% of the v1 test scripts load); see [docs/V1.md](docs/V1.md).
+**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - all 186 v1 commands, the v1 language and the v1 Gui; see [docs/V1.md](docs/V1.md).
 
 **Missing or left to do:**
 - **Windows COM servers:** objects are real native COM (ComCall, ComObjQuery, ComObjFromPtr, IDispatch both ways, a running-object table shared by BHK scripts), and WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application, WMI and the web browser are emulated; servers that only exist as Windows binaries (Office, UIAutomation, WebView2) aren't available.
@@ -25,13 +25,13 @@
 - **Windows DLLs:** DllCall emulates the common Win32 APIs (user32, kernel32, shell32, ole32/oleaut32) and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
 - **Custom controls of unregistered classes:** `Gui.Add("Custom")` covers the standard Win32 classes plus SysIPAddress32, RichEdit and Scintilla; classes a script registers itself with RegisterClassEx have no Linux equivalent.
 - **Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`), and control messages reach other apps' widgets through AT-SPI; X11 programs have no Win32 message queue for anything else.
-- **AutoHotkey v1 beyond hotkey scripts:** the v1 frontend covers common keyboard/mouse scripts; legacy `Gui`/`MsgBox` commands, `Gosub`, traditional `If var = value`, `ErrorLevel` and v1 objects are not implemented (see [docs/V1.md](docs/V1.md)).
+- **AutoHotkey v1 quirks:** every v1.1 command, the v1 language (legacy `If`, labels/`Gosub`, `ErrorLevel`, v1 objects and classes) and the v1 `Gui` run through the frontend; quirks of releases before v1.1 aren't reproduced, and an ambiguous script may need `--ahk-version=1` (see [docs/V1.md](docs/V1.md)).
 
 The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
 <!-- parity:summary:end -->
 
 
-Run **AutoHotkey v2** scripts and supported **v1 hotkey scripts** natively on **Linux (X11)**.
+Run **AutoHotkey v2** and **v1.1** scripts natively on **Linux (X11)**.
 
 BHK is a compatibility layer in the spirit of Wine/Proton, but it doesn't
 emulate Windows. It reimplements the AutoHotkey v2 language and runtime in
@@ -132,11 +132,11 @@ bhk doctor                 # what BHK can use on this machine
 - **Proof:**
   - `python3 tests/run.py` runs the regression suite. Its expected outputs were checked against the AutoHotkey source.
   - AutoHotkey's own UX scripts load, and Window Spy runs with live data.
-  - 327 of 337 scripts from seven popular v2 repositories and their submodules load (thqby/ahk2_lib, Descolada's libraries, UIA-v2 and OCR, jNizM's scripts, cJson, JXON). The other 10 are AutoHotkey v1 files, a code-generation template, or include files that aren't in their repos. See `docs/COMPATIBILITY.md`, and reproduce with `tests/validate_corpus.sh`.
+  - 332 of 337 scripts from seven popular v2 repositories and their submodules load (thqby/ahk2_lib, Descolada's libraries, UIA-v2 and OCR, jNizM's scripts, cJson, JXON), including 5 AutoHotkey v1 test files that run through the v1 frontend. The other 5 are a code-generation template, a test runner mixing v1 and v2 files, a library fragment, or include files that aren't in their repos. See `docs/COMPATIBILITY.md`, and reproduce with `tests/validate_corpus.sh`.
 
 ## Not supported
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
-- **AutoHotkey v1 scripts:** common hotkey scripts are supported through a compatibility frontend; full v1 language/API parity is not claimed. See [v1 support](docs/V1.md).
+- **AutoHotkey v1 scripts:** run through a compatibility frontend that covers every v1.1 command, the v1 language (legacy `If`, labels and `Gosub`, `ErrorLevel`, v1 objects) and the v1 Gui. See [v1 support](docs/V1.md).
 - **COM servers and DLLs that only exist as Windows binaries** (Office, UIAutomation, WebView2, arbitrary `.dll`s). COM itself works natively (`ComCall`, `ComObjQuery`, `ComObjActive` between BHK scripts), the common automation objects (`WinHttp.WinHttpRequest.5.1`, `MSXML2.XMLHTTP`, `Scripting.Dictionary`, `WScript.Shell`, `Scripting.FileSystemObject`, `ADODB.Stream`, `SAPI.SpVoice`, `Shell.Application`, WMI via `ComObjGet("winmgmts:")`) are emulated, and DllCall emulates the common Win32 APIs.
 - **Moving or restyling other programs' controls:** other apps' widgets are read and operated through the accessibility bus (AT-SPI), which has no way to move, hide or restyle them. Apps that don't publish accessibility data (e.g. Qt without `QT_ACCESSIBILITY=1`) stay opaque.
 
@@ -144,7 +144,7 @@ bhk doctor                 # what BHK can use on this machine
 If you are an AI agent trying to use this project, these are the facts you need:
 - **Update / uninstall:** `bhk update` (git pull or ZIP re-download), `bhk uninstall [--purge] [--yes]`.
 - **Command:** `bhk <script.ahk> [args]`, or `python3 -m bunnyhotkey <script.ahk>` from the repo root with no install. Exit code = the script's `ExitApp` code; 2 = load error.
-- **Script syntax:** v2 remains the default for ambiguous files. Common v1 hotkey syntax is detected automatically; use `--ahk-version=1` for ambiguous legacy files. See [supported v1 syntax and limits](docs/V1.md).
+- **Script syntax:** v2 remains the default for ambiguous files. v1 syntax is detected automatically, and if the guessed version doesn't load BHK tries the other; use `--ahk-version=1` to force v1. See [supported v1 syntax and limits](docs/V1.md).
 - **Headless / CI use:** pass `--console --backend=null`.
   - Errors go to stderr in AutoHotkey's `/ErrorStdOut` format: `file (line) : ==> message` / `     Specifically: extra`.
   - `FileAppend text, "*"` writes to stdout. Use it to get results out of a script.

@@ -98,5 +98,26 @@ class LegacyTests(unittest.TestCase):
             with self.assertRaises(AhkSyntaxError):
                 self.load(path)
 
+    def test_detection_ignores_forms_valid_in_v2(self):
+        from bunnyhotkey.legacy import detect_text
+        v2 = ('class B {\n  static E(b) {\n    if b is String\n      return 1\n    if b = 0\n      return 2\n'
+              '    try x() \n    catch TargetError\n      return 3\n  }\n}\nMsgBox npEl.DumpAll()\n'
+              'MouseMove found.x, found.y\n')
+        self.assertEqual(detect_text(v2), '2')
+        self.assertEqual(detect_text('if x <> 5\n  MsgBox no\nname = Bunny\n'), '1')
+
+    def test_falls_back_to_the_other_version(self):
+        with tempfile.TemporaryDirectory() as d:
+            lib = Path(d, 'lib.ahk')
+            lib.write_text('Get(&a?) {\n  return IsSet(a)\n}\n')
+            main = Path(d, 'main.ahk')
+            # Scored as v1 on its own, but the included library only loads as v2.
+            main.write_text('#Include lib.ahk\nSetTimer Tick, -3000\nTick() {\n}\n')
+            p = Program(str(main), [], {'backend': 'null', 'gui_errors': False, 'ahk_version': 'auto',
+                                        'validate': True})
+            self.addCleanup(lambda: p.shutdown())
+            self.assertEqual(p.run(), 0)
+            self.assertEqual(p.rt.script_version, '2')
+
 if __name__ == '__main__':
     unittest.main()

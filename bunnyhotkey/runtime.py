@@ -66,12 +66,13 @@ class UserFunc(FuncBase):
 
 
 class Frame:
-    __slots__ = ("cells", "free", "func", "this", "args")
+    __slots__ = ("cells", "free", "func", "this", "args", "dyn")
 
     def __init__(self, cells, free, func):
         self.cells = cells
         self.free = free
         self.func = func
+        self.dyn = None
 
 
 class CParam:
@@ -141,6 +142,17 @@ class CompiledFunc:
             rt.depth = 0
             throw("Error", "Recursion limit exceeded.")
         rt.call_stack.append(self)
+        if rt.v1:
+            rt.v1_frames.append(frame)
+            try:
+                self.body(frame)
+            except ReturnEx as r:
+                return r.value
+            finally:
+                rt.v1_frames.pop()
+                rt.call_stack.pop()
+                rt.depth -= 1
+            return ""
         try:
             self.body(frame)
         except ReturnEx as r:
@@ -414,6 +426,8 @@ class Runtime:
         self.on_exit_funcs: list = []
         self.on_error_funcs: list = []
         self.label_table = {}
+        self.v1 = False
+        self.v1_hex = False
         self.hotkeys = None
         self.hotstrings = None
         self.backend = None
@@ -503,6 +517,8 @@ class Runtime:
         meta = (start.find("__Get") if start is not None else self.find_prop(obj, "__Get"))[0]
         if meta is not None and meta.call is not None:
             return self.call(meta.call, [this, name, AhkArray(None, list(args))])
+        if self.v1:
+            return ""
         throw("PropertyError", f'This value of type "{type_name(obj)}" has no property named "{name}".', name)
 
     def set_prop(self, obj, name, value, args=(), start=None, this=None):
@@ -530,6 +546,8 @@ class Runtime:
             self.call(meta.call, [this, name, AhkArray(None, list(args)), value])
             return value
         if not isinstance(this, AhkObject) or args:
+            if self.v1:
+                return value if not isinstance(this, AhkObject) else self.set_item(self.get_prop(this, name), value, list(args))
             throw("PropertyError", f'This value of type "{type_name(obj)}" has no property named "{name}".', name)
         this.define_value(name, value)
         return value
@@ -544,10 +562,17 @@ class Runtime:
             if p.is_value:
                 return self.call(p.value, [this, *args])
             if p.get is not None:
+                if self.v1:
+                    v = self.call(p.get, [this])
+                    if not args and not isinstance(v, AhkObject):
+                        return v      # v1 code calls v2 properties as methods: x.Count(), f.Length()
+                    return self.call(v, list(args))
                 return self.call(self.call(p.get, [this]), list(args))
         meta = (start.find("__Call") if start is not None else self.find_prop(obj, "__Call"))[0]
         if meta is not None and meta.call is not None:
             return self.call(meta.call, [this, name, AhkArray(None, list(args))])
+        if self.v1:
+            return ""
         throw("MethodError", f'This value of type "{type_name(obj)}" has no method named "{name}".', name)
 
     def call(self, f, args):
@@ -555,6 +580,10 @@ class Runtime:
             return f.call(args)
         if isinstance(f, AhkObject):
             return self.call_method(f, "Call", args)
+        if self.v1:
+            if type(f) is str and f:
+                return self.call(self.v1_lookup_func(f, True), args)
+            return ""
         throw("MethodError", f'This value of type "{type_name(f)}" has no method named "Call".', "Call")
 
     def get_item(self, obj, args):
@@ -568,6 +597,8 @@ class Runtime:
                 return r
             if p is not None and p.is_value:
                 return self.get_item(p.value, args)
+        if self.v1:
+            return ""
         throw("PropertyError", f'This value of type "{type_name(obj)}" has no property named "__Item".', "__Item")
 
     def set_item(self, obj, value, args):
@@ -580,6 +611,8 @@ class Runtime:
             r = obj.native_item_set(value, args)
             if r is not NotImplemented:
                 return value
+        if self.v1:
+            return value
         throw("PropertyError", f'This value of type "{type_name(obj)}" has no property named "__Item".', "__Item")
 
     # ------------------------------------------------------------ enumeration
@@ -618,9 +651,11 @@ class Runtime:
         if t is str:
             return v
         if t is int:
-            return str(v)
+            return str(v) if not self.v1_hex else self.v1_fmt_int(v)
         if t is float:
-            return fmt_float(v)
+            return fmt_float(v) if not self.v1 else self.v1_fmt_float(v)
+        if self.v1:
+            return self.v1_to_str(v)
         if v is UNSET:
             throw("UnsetError", "Parameter has no value.")
         throw("TypeError", type_error_msg("String", v), value_text(v))
@@ -701,6 +736,9 @@ class Runtime:
         saved_line, saved_file = self.line, self.file
         saved_stack = self.call_stack
         self.call_stack = []
+        saved_v1 = self.v1_frames if self.v1 else None
+        if self.v1:
+            self.v1_frames = []
         saved_depth = self.depth
         self.depth = 0
         try:
@@ -718,6 +756,8 @@ class Runtime:
             self.thread = prev
             self.line, self.file = saved_line, saved_file
             self.call_stack = saved_stack
+            if saved_v1 is not None:
+                self.v1_frames = saved_v1
             self.depth = saved_depth
 
     def _fire_due_timers(self, only_check=False):
@@ -840,12 +880,18 @@ def _num_operand(rt, v, op):
         n = str_to_number(v)
         if n is not None:
             return n
+    if rt.v1:
+        return None
     throw("TypeError", type_error_msg("Number", v), value_text(v))
 
 
 def arith(rt, op, a, b):
     x = _num_operand(rt, a, op)
     y = _num_operand(rt, b, op)
+    if rt.v1:
+        r = rt.v1_arith(op, x, y)
+        if r is not NotImplemented:
+            return r
     tx, ty = type(x), type(y)
     if tx is int and ty is int:
         if op == "+":
@@ -949,6 +995,8 @@ def compare(rt, op, a, b):
         eq = sa == sb
         return int(eq if op == "==" else not eq)
     # relational
+    if rt.v1:
+        return rt.v1_relational(op, a, b)
     if a_obj or b_obj:
         throw("TypeError", type_error_msg("Number", a if a_obj else b), value_text(a if a_obj else b))
     na = _num_operand(rt, a, op)
@@ -973,6 +1021,8 @@ def _cstr(rt, v):
     t = type(v)
     if t is str:
         return v
+    if rt.v1:
+        return rt.to_str(v)
     if t is int:
         return str(v)
     if t is float:

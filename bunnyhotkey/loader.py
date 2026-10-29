@@ -37,7 +37,14 @@ class Loader:
         real = os.path.realpath(path) if path != "*" else "*"
         rt.included.add(real.lower())
         rt.files.append(path)
-        lines = SourceReader(text, path).logical_lines()
+        if getattr(rt, "script_version", None) is None:
+            from .legacy import detect_text
+            rt.script_version = detect_text(text, rt.options.get("ahk_version", "auto"))
+        if rt.script_version == "1":
+            from .legacy import logical_lines
+            lines = logical_lines(text, path)
+        else:
+            lines = SourceReader(text, path).logical_lines()
         out: list[LogicalLine] = []
         saved_dir = self.include_dir
         self.include_dir = os.path.dirname(os.path.abspath(path)) if path != "*" else os.getcwd()
@@ -120,11 +127,13 @@ class Loader:
     def load(self, path):
         from .parser import parse_lines
         from .compiler import Compiler
+        self.rt.script_version = None
         lines = self.read_file(path)
-        from .legacy import detect, translate
-        self.rt.script_version = detect(lines, self.rt.options.get("ahk_version", "auto"))
         if self.rt.script_version == "1":
-            lines = translate(lines)
+            from .legacy import translate
+            from .lib import v1
+            lines, tr = translate(lines)
+            v1.setup(self.rt, tr)
         self.pre_directives(lines)
         stmts = parse_lines(lines, path)
         comp = Compiler(self.rt)
@@ -208,6 +217,7 @@ class Program:
         from .lib import register_all
         from .lib import core
         from .lib.input_ import _ih_setup
+        self.args = args
         self.rt = rt = Runtime(path, args, options)
         rt.lib_core = core
         setup(rt)
@@ -226,13 +236,32 @@ class Program:
         com.setup_classes()
         self.loader = Loader(rt)
 
+    def _load_other_version(self):
+        """Auto-detection guessed from the main file alone; if that version doesn't load, try the other one."""
+        rt = self.rt
+        if rt.options.get("ahk_version", "auto") != "auto" or rt.script_version not in ("1", "2"):
+            return None
+        options = dict(rt.options, ahk_version="2" if rt.script_version == "1" else "1")
+        other = Program(rt.script_path, self.args, options)
+        try:
+            loaded = other.loader.load(other.rt.script_path)
+        except AhkSyntaxError:
+            return None
+        other.rt.options["ahk_version"] = "auto"
+        self.rt, self.loader = other.rt, other.loader
+        return loaded
+
     def run(self) -> int:
         rt = self.rt
         try:
             auto, hot = self.loader.load(rt.script_path)
         except AhkSyntaxError as e:
-            self.load_error(e)
-            return 2
+            loaded = self._load_other_version()
+            if loaded is None:
+                self.load_error(e)
+                return 2
+            auto, hot = loaded
+            rt = self.rt
         if rt.options.get("validate"):
             return 0
         self.single_instance()
