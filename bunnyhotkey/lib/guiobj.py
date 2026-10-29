@@ -1216,6 +1216,9 @@ class MenuObj(AhkObject):
     def changed(self):
         if self.on_change is not None:
             self.on_change()
+        else:
+            from . import tray
+            tray.refresh()          # a submenu of the tray menu may have changed
         for g in GUIS.values():
             if g.menubar is not None and not g.destroyed:
                 _srv().call("menubar", win=g.wid, tree=menu_tree(g.menubar))

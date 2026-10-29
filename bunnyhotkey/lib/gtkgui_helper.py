@@ -1192,6 +1192,7 @@ def make(win, cid, t, opts):
             tv.connect("focus-out-event", lambda *_: ev(cid, "LoseFocus", 0, always=True) and False)
         else:
             w = Gtk.Entry(text=text)
+            w.set_activates_default(True)     # Enter in a single-line Edit presses the Default button (Win32 dialogs)
             w.set_visibility(not opts.get("password"))
             w.set_editable(not opts.get("readonly"))
             if opts.get("limit"):
@@ -1931,6 +1932,11 @@ class Tray:
     def set_items(self, items):
         for child in self.menu.get_children():
             self.menu.remove(child)
+        if items and "menu" in items[0]:
+            # the full menu tree: submenus, radio items, icons and colours, like any other Menu
+            build_menu(items, self.menu)
+            self.menu.show_all()
+            return
         for i, it in enumerate(items):
             label = it.get("label", "")
             if label == "":

@@ -147,8 +147,8 @@ def show():
         return None
     m = menu()
     _sync_checks(m)
-    from .guiobj import _srv
-    kind = _srv().call("tray", icon=_icon_path(), tip=_tip(), items=m.wire(), click_count=m.click_count,
+    from .guiobj import _srv, menu_tree
+    kind = _srv().call("tray", icon=_icon_path(), tip=_tip(), items=menu_tree(m), click_count=m.click_count,
                        visible=not getattr(rt(), "icon_hidden", False))
     _shown = True
     return kind

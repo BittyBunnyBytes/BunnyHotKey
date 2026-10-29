@@ -98,6 +98,8 @@ bhk doctor                 # what BHK can use on this machine
   - Send/SendInput/SendText with full syntax, Click, MouseMove and friends.
   - GetKeyState, KeyWait, InputHook.
   - Hotkeys grab only the keys a script defines.
+  - `SendLevel`/`#InputLevel` work as in AutoHotkey, `LWin::`-style hotkeys suppress the modifier, and hotstrings swallow their end key until the replacement is typed.
+  - Live input tests: `python3 tests/run_live.py` (acts on the running desktop with keys no app uses).
 - **Windows:** WinTitle matching (title, `ahk_class`, `ahk_exe`, `ahk_pid`,
   `ahk_id`, `ahk_group`, all match modes), WinActivate, WinMove and the other
   Win* functions, PixelGetColor, PixelSearch and ImageSearch (PNG/BMP).

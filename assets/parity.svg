@@ -39,14 +39,14 @@
 <text x="685" y="269" font-size="11.5" fill="#59636e">EWMH + X Shape (regions, TransColor)</text>
 <text x="20" y="299" font-size="13" fill="#1f2328">Tray icon &amp; menu</text>
 <rect x="300" y="287" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="287" width="313.5" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="299" font-size="13" font-weight="700" fill="#2da44e">95%</text>
-<text x="685" y="299" font-size="11.5" fill="#59636e">XFCE live; Cinnamon via XApp monitor</text>
+<rect x="300" y="287" width="323.4" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="299" font-size="13" font-weight="700" fill="#2da44e">98%</text>
+<text x="685" y="299" font-size="11.5" fill="#59636e">submenus, icons; XFCE live, Cinnamon via XApp</text>
 <text x="20" y="329" font-size="13" fill="#1f2328">Hotkeys &amp; hotstrings (X11)</text>
 <rect x="300" y="317" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="317" width="297.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="329" font-size="13" font-weight="700" fill="#2da44e">90%</text>
-<text x="685" y="329" font-size="11.5" fill="#59636e">bare modifiers not suppressible</text>
+<rect x="300" y="317" width="323.4" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="329" font-size="13" font-weight="700" fill="#2da44e">98%</text>
+<text x="685" y="329" font-size="11.5" fill="#59636e">SendLevel rules, bare modifiers, end keys</text>
 <text x="20" y="359" font-size="13" fill="#1f2328">All built-in functions</text>
 <rect x="300" y="347" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="347" width="320.1" height="16" rx="4" fill="#2da44e"/>

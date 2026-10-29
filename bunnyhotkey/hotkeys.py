@@ -189,14 +189,18 @@ class HookEngine:
         st: dict[str, set] = {}
         for code in self.down:
             mod = K.MOD_KEYS.get(code)
+            if mod and code in self.suppressed_down and self._bare_mod_hotkey(code):
+                continue        # swallowed by its own hotkey, so not logically down (g_modifiersLR_logical)
             if mod:
                 side = "L" if K.MOD_LEFT[mod] == code else "R"
                 st.setdefault(mod, set()).add(side)
         return st
 
     # --- main entry ---
-    def on_event(self, code: int, is_down: bool, kind: str = "key", repeat: bool = False) -> bool:
-        """Process one physical event.  Returns True if it must be suppressed."""
+    def on_event(self, code: int, is_down: bool, kind: str = "key", repeat: bool = False, level=None) -> bool:
+        """Process one event.  level is None for physical input, else the SendLevel of an event the script sent.
+        Returns True if it must be suppressed."""
+        self.event_level = level
         suppressed = self._on_event(code, is_down, kind, repeat)
         hist = globals()["KEY_HISTORY"]
         if hist.maxlen:
@@ -260,6 +264,8 @@ class HookEngine:
             v = self._active_variant(hk)
             if v is None:
                 continue
+            if not self._level_ok(hk, v):
+                continue
             rank = (sp.prefix is not None, len(sp.mods), not sp.wildcard)
             if best is None or rank > best[0]:
                 best = (rank, hk, v)
@@ -270,6 +276,27 @@ class HookEngine:
             self.prefix_used.add(hk.spec.prefix.code)
         self.rt.fire_hotkey(hk, v)
         return not hk.spec.passthrough
+
+    def uses_hook(self, hk: Hotkey, v: Variant) -> bool:
+        """Whether AutoHotkey would implement this hotkey with the keyboard hook rather than RegisterHotkey
+        (hotkey.cpp Hotkey::Perform/HK_KEYBD_HOOK selection)."""
+        sp = hk.spec
+        return bool(sp.use_hook or sp.wildcard or sp.passthrough or sp.up or sp.prefix is not None
+                    or v.input_level > 0 or self.rt.rt.directives.get("UseHook") or sp.key.kind != "key"
+                    or (K.MOD_KEYS.get(sp.key.code) and not sp.mods))
+
+    def _level_ok(self, hk: Hotkey, v: Variant) -> bool:
+        """Sent input triggers a hook hotkey only if its SendLevel exceeds the hotkey's #InputLevel; a
+        RegisterHotkey hotkey is triggered by any input, which is why AutoHotkey has the $ prefix."""
+        level = getattr(self, "event_level", None)
+        if level is None:
+            return True
+        return not self.uses_hook(hk, v) or level > v.input_level
+
+    def _bare_mod_hotkey(self, code) -> bool:
+        return any(hk.spec.key.kind == "key" and hk.spec.prefix is None and not hk.spec.mods and not hk.spec.up
+                   and (hk.spec.key.code == code or K.MOD_KEYS.get(code) == hk.spec.key.neutral)
+                   for hk in self.hotkeys)
 
     def _on_down(self, code, kind, repeat) -> bool:
         prefixes = self.prefixes()

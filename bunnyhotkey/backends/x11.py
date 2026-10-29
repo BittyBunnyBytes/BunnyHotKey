@@ -8,8 +8,10 @@ Mapping to AutoHotkey's design (hook.cpp / hotkey.cpp):
     events, which X delivers for every physical device regardless of grabs.
   * XTest is the SendInput equivalent; injected events are told apart from
     physical ones by the XTEST slave device id.
-Limitations on X11: a pure modifier key
-(LWin::, LCtrl::) and hotstring end characters cannot be suppressed.
+  * A bare modifier hotkey (LWin::, RCtrl::) grabs the key, and while it is unconditional the keycode is taken
+    out of the modifier map (backends/modmap.py), so Win+E reaches the app as a plain "e", as on Windows.
+  * Sent input is tagged with its SendLevel, so hook hotkeys, hotstrings and InputHooks apply AutoHotkey's
+    SendLevel/#InputLevel/MinSendLevel rules, while RegisterHotkey-style hotkeys see any sent input.
 """
 from __future__ import annotations
 
@@ -54,6 +56,14 @@ class X11Backend:
         self.phys_down: set[int] = set()
         self.last_input = time.monotonic()
         self.xtest_ids: set[int] = set()
+        import collections
+        self.sent = collections.deque()          # injected key events awaiting their raw/grabbed echo
+        self.sent_down: set[int] = set()         # keys the script is holding down via XTest
+        from .modmap import ModifierBlock
+        self.modblock = ModifierBlock()
+        self.mod_released: set[int] = set()      # suppressed modifiers whose keyboard grab was let go
+        self.hs_fed: set[int] = set()            # grabbed end-char keys already fed to the hotstring recognizer
+        self.end_codes: set[int] = set()
         self.xi_opcode = None
         self.need_refresh = threading.Event()
         self.spare_keycode = None
@@ -79,6 +89,11 @@ class X11Backend:
         os.write(self.wake_w, b"q")
         if self.thread:
             self.thread.join(1.0)
+        if self.modblock.removed:
+            try:
+                self.modblock.restore(xlib.Display())
+            except OSError:
+                pass
 
     def refresh(self):
         self.need_refresh.set()
@@ -125,6 +140,7 @@ class X11Backend:
         want_keys: dict[tuple, bool] = {}
         want_buttons: dict[tuple, bool] = {}
         codes = set()
+        block: set[int] = set()
         if hk_engine is not None:
             for hk in tuple(hk_engine.hotkeys):
                 sp = hk.spec
@@ -132,10 +148,19 @@ class X11Backend:
                     continue
                 if sp.passthrough:
                     continue
-                if sp.key.kind == "key" and K.MOD_KEYS.get(sp.key.code) and sp.prefix is None and not sp.mods:
-                    continue    # bare modifier keys are observed, not grabbed, on X11
-                masks = [xlib.AnyModifier] if sp.wildcard or sp.prefix is not None else \
-                    [sum(MOD_MASK[m] for m in sp.mods) | lk for lk in LOCK_COMBOS]
+                bare_mod = sp.key.kind == "key" and sp.prefix is None and not sp.mods and \
+                    (K.MOD_KEYS.get(sp.key.code) or sp.key.neutral)
+                if bare_mod:
+                    # LWin:: etc.: grab under any modifier state; unconditional ones also leave the modifier map
+                    masks = [xlib.AnyModifier]
+                    if not sp.up and all(v.criterion is None for v in hk.variants if v.enabled):
+                        if sp.key.neutral:
+                            block |= {K.MOD_LEFT[sp.key.neutral] + 8, K.MOD_RIGHT[sp.key.neutral] + 8}
+                        else:
+                            block.add(sp.key.code + 8)
+                else:
+                    masks = [xlib.AnyModifier] if sp.wildcard or sp.prefix is not None else \
+                        [sum(MOD_MASK[m] for m in sp.mods) | lk for lk in LOCK_COMBOS]
                 if sp.key.kind == "key":
                     kc = sp.key.code + 8
                     if sp.key.neutral:
@@ -152,7 +177,8 @@ class X11Backend:
                         for mk in masks:
                             want_buttons[(btn, mk)] = True
         for key in list(self.grabbed_keys):
-            if key not in want_keys:
+            if key not in want_keys and not (key[1] == xlib.AnyModifier and
+                                             key[0] - 8 in getattr(self, "end_codes", set())):
                 x.XUngrabKey(d.dpy, key[0], key[1], d.root)
                 del self.grabbed_keys[key]
         for key in want_keys:
@@ -168,8 +194,38 @@ class X11Backend:
                 x.XGrabButton(d.dpy, key[0], key[1], d.root, 1, xlib.ButtonPressMask | xlib.ButtonReleaseMask,
                               xlib.GrabModeSync, xlib.GrabModeAsync, 0, 0)
                 self.grabbed_buttons[key] = True
+        # hotstring end characters: grabbed so a hotstring can swallow its end key (Enter, Tab, Space...) as the
+        # hook does on Windows; replayed to the app otherwise
+        end_codes = set()
+        hs = self.rt.hotstrings
+        if hs is not None and any(h.enabled and not h.asterisk for h in hs.items):
+            from .. import layout
+            for ch in set(hs.end_chars) | {" ", "\n", "\t"}:
+                k = layout.char_to_key(ch) if ch not in " \n\t" else None
+                kc = {" ": 57, "\n": 28, "\t": 15}.get(ch) or (k[0] if k else None)
+                if kc and kc + 8 not in {kk for kk, _ in want_keys}:
+                    end_codes.add(kc)
+            if 28 in end_codes:
+                end_codes.add(96)          # NumpadEnter
+        for kc in end_codes:
+            key = (kc + 8, xlib.AnyModifier)
+            if key not in self.grabbed_keys:
+                x.XGrabKey(d.dpy, key[0], key[1], d.root, 1, xlib.GrabModeAsync, xlib.GrabModeSync)
+                self.grabbed_keys[key] = True
+        for key in list(self.grabbed_keys):
+            if key[1] == xlib.AnyModifier and key[0] - 8 in getattr(self, "end_codes", set()) and \
+                    key[0] - 8 not in end_codes and key not in want_keys:
+                x.XUngrabKey(d.dpy, key[0], key[1], d.root)
+                del self.grabbed_keys[key]
+        self.end_codes = end_codes
+        codes |= end_codes
         self.grabbed_codes = codes
         d.flush()
+        try:
+            self.modblock.apply(d, block)
+        except Exception as e:      # never break hotkeys over the modifier map
+            import sys
+            print(f"bhk x11 backend: modifier map: {e!r}", file=sys.stderr)
 
     # ------------------------------------------------------------ event loop
     def _loop(self):
@@ -214,8 +270,21 @@ class X11Backend:
         d = self.ev
         code = kev.keycode - 8
         engine = self.rt.hotkeys
-        suppress = engine.on_event(code, down) if engine is not None else False
-        if down:
+        level = self.sent_level(code, down, 5)
+        suppress = engine.on_event(code, down, level=level) if engine is not None else False
+        if down and not suppress and code in getattr(self, "end_codes", ()):
+            hs = self.rt.hotstrings
+            ch = self._char_for(code, level)
+            if hs is not None and ch:
+                suppress = hs.on_char(ch, True, level)
+                self.hs_fed.add(code)
+        if down and suppress and K.MOD_KEYS.get(code):
+            # a suppressed bare modifier: swallow it, then let go of the keyboard so keys pressed while it is
+            # held reach the focused app (the hook only blocks the modifier itself on Windows)
+            d.x.XAllowEvents(d.dpy, xlib.AsyncKeyboard, kev.time)
+            d.x.XUngrabKeyboard(d.dpy, kev.time)
+            self.mod_released.add(code)
+        elif down:
             d.x.XAllowEvents(d.dpy, xlib.AsyncKeyboard if suppress else xlib.ReplayKeyboard, kev.time)
         else:
             d.x.XAllowEvents(d.dpy, xlib.AsyncKeyboard, kev.time)
@@ -237,6 +306,21 @@ class X11Backend:
 
     def _on_raw(self, evtype, raw):
         if raw.sourceid in self.xtest_ids:
+            # input this script sent: only SendLevel > 0 reaches ~hotkeys, hotstrings and InputHooks
+            if evtype in (xlib.XI_RawKeyPress, xlib.XI_RawKeyRelease):
+                code = raw.detail - 8
+                down = evtype == xlib.XI_RawKeyPress
+                level = self.sent_level(code, down, 4)
+                (self.sent_down.add if down else self.sent_down.discard)(code)
+                engine = self.rt.hotkeys
+                if not down and code in self.mod_released and engine is not None:
+                    self.mod_released.discard(code)
+                    engine.on_event(code, False, level=level)
+                    return
+                if level and engine is not None and code not in self.grabbed_codes:
+                    engine.on_event(code, down, level=level)
+                if level and down:
+                    self._typed(code, code in self.grabbed_codes, level)
             return
         self.last_input = time.monotonic()
         engine = self.rt.hotkeys
@@ -248,6 +332,9 @@ class X11Backend:
             grabbed = code in self.grabbed_codes
             if engine is not None and not grabbed:
                 engine.on_event(code, down, repeat=repeat)
+            elif engine is not None and not down and code in self.mod_released:
+                self.mod_released.discard(code)  # its release went to the app after the grab was let go
+                engine.on_event(code, False)
             elif engine is not None and not down:
                 engine.down.pop(code, None)      # a replayed grabbed key's release went to the app
             if down:
@@ -270,13 +357,33 @@ class X11Backend:
                 if hs is not None and hs.mouse_reset:
                     hs.reset()
 
-    def _typed(self, code, grabbed):
-        """Feed the hotstring recognizer / InputHooks with the character this key produced."""
+    def _char_for(self, code, level=None):
+        """The character a key press produces with the current modifiers ("" for none)."""
+        held = self.phys_down | self.sent_down if level else self.phys_down
+        if any(c in held for c in (29, 97, 56, 125, 126)):
+            return ""
+        if code == 14:
+            return "\b"
+        if code in (28, 96):
+            return "\n"
+        if code == 15:
+            return "\t"
+        from .. import layout
+        shift = any(c in held for c in (42, 54))
+        ch = layout.code_to_char(code, shift) or (K._US_BY_CODE.get(code, "") if not shift else "")
+        if self.toggle_state("CapsLock") and ch.isalpha():
+            ch = ch.swapcase()
+        return ch
+
+    def _typed(self, code, grabbed, level=None):
+        """Feed the hotstring recognizer / InputHooks with the character this key produced (level: SendLevel of
+        sent input, None for physical)."""
         rt = self.rt
         k = K.from_code(code)
         name = k.name if k else ""
-        shift = any(c in self.phys_down for c in (42, 54))
-        ctrl_alt = any(c in self.phys_down for c in (29, 97, 56, 125, 126))
+        held = self.phys_down | self.sent_down if level else self.phys_down
+        shift = any(c in held for c in (42, 54))
+        ctrl_alt = any(c in held for c in (29, 97, 56, 125, 126))
         hs = rt.hotstrings
         if code == 14:
             ch = "\b"
@@ -294,14 +401,16 @@ class X11Backend:
                 ch = ch.swapcase()
         from ..lib.input_ import input_hook_char, _ACTIVE_HOOKS
         if _ACTIVE_HOOKS:
-            input_hook_char(ch if ch not in ("\b",) else "", name)
+            input_hook_char(ch if ch not in ("\b",) else "", name, level)
         if hs is None:
             return
         if code in (103, 108, 105, 106, 102, 107, 104, 109) or ctrl_alt and not ch:
             hs.reset()
             return
-        if ch and not grabbed:
-            hs.on_char(ch, False)
+        if code in self.hs_fed:
+            self.hs_fed.discard(code)      # the grab path already gave this key to the hotstring recognizer
+        elif ch and not grabbed:
+            hs.on_char(ch, False, level)
 
     # ------------------------------------------------------------ output
     def _x(self):
@@ -309,8 +418,26 @@ class X11Backend:
 
     def key(self, code, down):
         t = xlib.Xtst()
+        try:
+            level = self.rt.thread.settings.send_level
+        except AttributeError:
+            level = 0
         with self.inj_lock:
+            self.sent.append([code, bool(down), level, time.monotonic(), False, False])
             t.XTestFakeKeyEvent(self.inj.dpy, code + 8, 1 if down else 0, 0)
+
+    def sent_level(self, code, down, path):
+        """SendLevel of a key event this process injected (None if it is physical input).  path is 4 for the
+        raw-event stream and 5 for grabbed core events; each injected event shows up once on each."""
+        now = time.monotonic()
+        with self.inj_lock:
+            while self.sent and now - self.sent[0][3] > 2.0:
+                self.sent.popleft()
+            for e in self.sent:
+                if e[0] == code and e[1] == down and not e[path]:
+                    e[path] = True
+                    return e[2]
+        return None
 
     def tap(self, code):
         self.key(code, True)

@@ -771,11 +771,14 @@ class InputHookObj(AhkObject):
 _ACTIVE_HOOKS: list[InputHookObj] = []
 
 
-def input_hook_char(ch: str, keyname: str) -> bool:
-    """Feed typed text to active InputHooks; returns True if the key should be blocked."""
+def input_hook_char(ch: str, keyname: str, level=None) -> bool:
+    """Feed typed text to active InputHooks (level: None = physical, else the SendLevel of sent input, which
+    an InputHook collects only if it is at least its MinSendLevel); returns True if the key should be blocked."""
     block = False
     for ih in list(_ACTIVE_HOOKS):
         if not ih.in_progress:
+            continue
+        if level is not None and level < ih.min_send_level:
             continue
         if keyname.lower() in ih.end_keys or (ch and ch.lower() in ih.end_keys):
             _ih_end(ih, "EndKey", key=keyname)

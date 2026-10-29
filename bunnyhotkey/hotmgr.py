@@ -167,6 +167,7 @@ class Hotstring:
         self.key_delay = None      # K
         self.priority = 0
         self.suspend_exempt = False
+        self.input_level = 0
         self.apply(opts)
         self.running = 0
 
@@ -240,14 +241,16 @@ class HotstringEngine:
                     h.callback = callback
                 return h
         h = Hotstring(trigger, replacement, callback, self.default_opts + opts, criterion)
+        h.input_level = self.mgr.rt.directives["InputLevel"]
         self.items = self.items + [h]
         return h
 
     def reset(self):
         self.buffer = ""
 
-    def on_char(self, ch: str, can_suppress: bool) -> bool:
-        """A character was typed.  Returns True if the keystroke should be suppressed."""
+    def on_char(self, ch: str, can_suppress: bool, level=None) -> bool:
+        """A character was typed (level: None = physical, else the SendLevel of sent input).
+        Returns True if the keystroke should be suppressed."""
         if self.suspended and not any(h.suspend_exempt for h in self.items):
             return False
         if ch == "\b":
@@ -258,6 +261,8 @@ class HotstringEngine:
         for h in self.items:
             if not h.enabled or (self.suspended and not h.suspend_exempt):
                 continue
+            if level is not None and level <= h.input_level:
+                continue          # sent input only reaches hotstrings with a lower #InputLevel
             trig = h.trigger
             if h.asterisk:
                 typed = self.buffer
@@ -281,11 +286,15 @@ class HotstringEngine:
                 typed_trigger = typed[-len(trig):]
             if h.criterion is not None and not self.mgr.eval_criterion(h.criterion):
                 continue
-            suppress = can_suppress and h.backspace
+            # hook.cpp: the final key is suppressed if it would be backspaced over anyway
+            suppress = can_suppress and (h.backspace or (h.omit and not h.asterisk))
             self._fire(h, typed_trigger, end_char, suppress)
+            if h.replacement is not None:
+                # the screen no longer matches the buffer; keep the end char, which may start another hotstring
+                self.buffer = end_char
+            elif h.backspace:
+                self.buffer = self.buffer[:len(self.buffer) - len(h.trigger) - (1 if end_char else 0)]
             if h.reset:
-                self.buffer = ""
-            else:
                 self.buffer = ""
             return suppress
         return False
