@@ -237,6 +237,34 @@ def _run_ux(script, args):
     return subprocess.call([sys.executable, "-m", "bunnyhotkey", path, *args], cwd=ROOT)
 
 
+def _ux_path(script):
+    path = os.path.join(ahk_dir(), "UX", script)
+    if not os.path.exists(path):
+        alt = [os.path.join(i["path"], script) for i in installed_versions().values()]
+        path = next((p for p in alt if os.path.exists(p)), path)
+    return path if os.path.exists(path) else None
+
+
+def launch_dash():
+    """BHK started without a script (from its icon): open AutoHotkey's Dash, as AutoHotkey64.exe does.
+    The Dash is part of the official AutoHotkey release; offer to install it if it isn't there yet."""
+    if _ux_path("ui-dash.ahk") is None:
+        import tempfile
+        ask = ('r := MsgBox("AutoHotkey\'s Dash (new scripts, help, Window Spy, editor and launch settings) comes '
+               'with the official AutoHotkey release.`n`nDownload and install it now?", "Bunny Hot Key", '
+               '"YesNo Iconi")\nExitApp(r = "Yes" ? 0 : 1)\n')
+        with tempfile.NamedTemporaryFile("w", suffix=".ahk", delete=False) as fh:
+            fh.write(ask)
+        try:
+            if subprocess.call([sys.executable, "-m", "bunnyhotkey", "--no-tray", fh.name], cwd=ROOT) != 0:
+                return 0
+        finally:
+            os.unlink(fh.name)
+        if install([]) != 0 or _ux_path("ui-dash.ahk") is None:
+            return 1
+    return _run_ux("ui-dash.ahk", [])
+
+
 def new_script(args):
     name = args[0] if args else "New Script"
     if not name.lower().endswith(".ahk"):

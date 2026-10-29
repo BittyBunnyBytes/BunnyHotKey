@@ -15,6 +15,7 @@ import subprocess
 import time
 
 from .. import objects as O
+from ..errors import AhkThrow
 from ..objects import throw
 from ..values import UNSET
 from . import export, setref
@@ -119,11 +120,79 @@ def _is_ahk_exe(hp, low):
                     "autohotkeyu32.exe") and not os.path.isfile(hp)
 
 
+_SYSTEM_VERBS = ("find", "explore", "open", "edit", "print", "properties")
+
+
 def _verb(target):
+    """script.cpp Run: "*Verb target", or a leading system verb (IS_VERB: find, explore, open, edit...)."""
     m = re.match(r"^\*(\w+)\s+(.*)$", target)
     if m:
         return m.group(1).lower(), m.group(2)
+    m = re.match(r"^(\w+)[ \t]+(.*)$", target)
+    if m and m.group(1).lower() in _SYSTEM_VERBS:
+        return m.group(1).lower(), m.group(2)
     return None, target
+
+
+def editor_command(path):
+    r"""argv that opens `path` for editing, as the "edit" verb of .ahk files does on Windows:
+    1. the edit command AutoHotkey's Dash saves (Editor settings: HKCR\AutoHotkeyScript\shell\edit\command),
+    2. the desktop's default text editor (the text/plain handler, via gtk-launch),
+    3. a common graphical editor, 4. $VISUAL / $EDITOR in a terminal, 5. xdg-open."""
+    from .files import host_path
+    from . import registry
+    try:
+        cmd = S(registry.RegRead("HKCR\\AutoHotkeyScript\\shell\\edit\\command", "", ""))
+    except Exception:
+        cmd = ""
+    if cmd.strip():
+        if "%1" in cmd or "%l" in cmd.lower():
+            cmd = re.sub(r'"?%[1lL]"?', lambda _m: '"' + path + '"', cmd)
+        else:
+            cmd += ' "' + path + '"'
+        try:
+            return _in_terminal(translate_command(cmd))
+        except AhkThrow:
+            pass
+    if shutil.which("xdg-mime") and shutil.which("gtk-launch"):
+        try:
+            app = subprocess.run(["xdg-mime", "query", "default", "text/plain"], capture_output=True,
+                                 text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            app = ""
+        if app and app != "bunnyhotkey.desktop":
+            return ["gtk-launch", app[:-8] if app.endswith(".desktop") else app, path]
+    for exe in ("mousepad", "gedit", "gnome-text-editor", "xed", "pluma", "kate", "kwrite", "featherpad",
+                "geany", "code", "subl"):
+        if shutil.which(exe):
+            return [exe, path]
+    ed = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if ed:
+        return _in_terminal(shlex.split(ed) + [path], force=True)
+    return ["xdg-open", host_path(path)]
+
+
+_TERMINAL_EDITORS = {"micro", "nano", "vim", "vi", "nvim", "emacs", "hx", "helix", "kak", "ne", "joe", "mcedit",
+                     "jed", "pico", "ed"}
+
+
+def _in_terminal(argv, force=False):
+    """Terminal editors (nano, micro, vim...) need a terminal window to show up in."""
+    if not force and os.path.basename(argv[0]) not in _TERMINAL_EDITORS:
+        return argv
+    for term in ("x-terminal-emulator", "xfce4-terminal", "kitty", "alacritty", "foot", "konsole",
+                 "gnome-terminal", "xterm"):
+        if shutil.which(term):
+            if term in ("gnome-terminal", "kitty", "alacritty", "foot"):
+                return [term, "--"] + argv if term == "gnome-terminal" else [term] + (["-e"] if term == "alacritty" else []) + argv
+            return [term, "-e", " ".join(shlex.quote(a) for a in argv)]
+    return argv
+
+
+def edit_file(path):
+    subprocess.Popen(editor_command(path), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    return ""
 
 
 def _current_user():
@@ -225,7 +294,9 @@ def _spawn(target, workdir, options):
     if verb in ("runas",):
         argv = ["pkexec"] + argv
     elif verb in ("edit",):
-        argv = ["xdg-open"] + argv[-1:]
+        argv = editor_command(host_path(target.strip().strip('"')))
+    elif verb in ("open", "explore", "find", "print", "properties") and len(argv) == 1:
+        argv = ["xdg-open", argv[0]]
     cwd = host_path(S(workdir)) if S(workdir) else None
     opts = S(options).lower()
     stdout = subprocess.DEVNULL if "hide" in opts else None

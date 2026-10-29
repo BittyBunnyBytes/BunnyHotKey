@@ -195,7 +195,75 @@ EMU = {
     "globalmemorystatusex": lambda p: 0,
     "getsystemtimeasfiletime": lambda p: (_write_out(p[0][1], "q", int((time.time() + 11644473600) * 10_000_000)), 0)[1],
     "getmenuitemcount": lambda p: _menu_count(p),
+    "mapwindowpoints": lambda p: _map_window_points(p),
+    "getsyscolor": lambda p: _sys_color(I(p[0][1])),
+    "setwindowtheme": lambda p: 0,                       # uxtheme: S_OK; GTK draws with its own theme
+    "setthreaddpihostingbehavior": lambda p: 0,
 }
+
+# GetSysColor index -> GTK theme colour (the desktop's real scheme); others keep Windows 10's defaults
+_THEME_OF = {15: "theme_bg_color", 4: "theme_bg_color", 0: "theme_bg_color", 12: "theme_bg_color",
+             22: "theme_bg_color", 25: "theme_bg_color", 30: "theme_bg_color", 5: "theme_base_color",
+             8: "theme_text_color", 18: "theme_fg_color", 7: "theme_fg_color", 9: "theme_fg_color",
+             19: "theme_fg_color", 13: "theme_selected_bg_color", 29: "theme_selected_bg_color",
+             14: "theme_selected_fg_color", 17: "insensitive_fg_color", 26: "link_color", 16: "borders",
+             10: "borders", 11: "borders", 3: "theme_unfocused_bg_color"}
+_THEME = None
+
+
+def _sys_color(n):
+    global _THEME
+    if _THEME is None:
+        try:
+            from .guiobj import _srv
+            _THEME = _srv().call("syscolors") or {}
+        except Exception:
+            _THEME = {}
+    hexrgb = _THEME.get(_THEME_OF.get(n, ""))
+    if hexrgb:
+        r, g, b = int(hexrgb[0:2], 16), int(hexrgb[2:4], 16), int(hexrgb[4:6], 16)
+        return (b << 16) | (g << 8) | r                  # COLORREF 0x00BBGGRR
+    return _SYS_COLORS.get(n, 0)
+
+
+# GetSysColor fallback: Windows 10's default colour scheme (COLORREF, 0x00BBGGRR)
+_SYS_COLORS = {0: 0xC8C8C8, 1: 0x000000, 2: 0xD1B499, 3: 0xDBCDBF, 4: 0xF0F0F0, 5: 0xFFFFFF, 6: 0x646464,
+               7: 0x000000, 8: 0x000000, 9: 0x000000, 10: 0xB4B4B4, 11: 0xFCF7F4, 12: 0xABABAB, 13: 0xD77800,
+               14: 0xFFFFFF, 15: 0xF0F0F0, 16: 0xA0A0A0, 17: 0x6D6D6D, 18: 0x000000, 19: 0x000000,
+               20: 0xFFFFFF, 21: 0x696969, 22: 0xE3E3E3, 23: 0x000000, 24: 0xE1FFFF, 26: 0xCC6600,
+               27: 0xEAD1B9, 28: 0xF2E4D7, 29: 0xD77800, 30: 0xF0F0F0}
+
+
+def _client_origin(h):
+    """Screen position of a window's (or one of this script's controls') client area; 0 = the screen."""
+    if not h:
+        return 0, 0
+    from .guiobj import CTRLS, gui_for_window
+    from .window import _dpy, geometry
+    d = _dpy()
+    c = CTRLS.get(h)
+    if c is not None:
+        gx, gy = _client_origin(c.gui.xid or c.gui.wid)
+        return gx + (c.x or 0), gy + (c.y or 0)
+    g = gui_for_window(h)
+    win = g.xid if g is not None and g.xid else h
+    x, y, _, _ = geometry(d, win, client=True)
+    return x, y
+
+
+def _map_window_points(p):
+    """MapWindowPoints(hFrom, hTo, lpPoints, cPoints): returns LOWORD dx | HIWORD dy, like user32."""
+    import struct
+    from .buffer import resolve
+    fx, fy = _client_origin(I(p[0][1]))
+    tx, ty = _client_origin(I(p[1][1]))
+    dx, dy = fx - tx, fy - ty
+    n = I(p[3][1]) if len(p) > 3 else 1
+    data, idx = resolve(p[2][1])
+    for k in range(n):
+        x, y = struct.unpack_from("<2i", data, idx + 8 * k)
+        struct.pack_into("<2i", data, idx + 8 * k, x + dx, y + dy)
+    return ((dy & 0xFFFF) << 16) | (dx & 0xFFFF)
 
 
 def _menu_count(p):

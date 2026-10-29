@@ -483,6 +483,31 @@ def lv_add_column(c, i):
     tree.insert_column(col, pos)
 
 
+def lv_tile_column(c, n):
+    """Tile view (LV_VIEW_TILE): icon, the first column as the title and the others as grey lines below."""
+    tree = c["tree"]
+    col = Gtk.TreeViewColumn()
+    pix = Gtk.CellRendererPixbuf()
+    pix.set_padding(4, 4)
+    col.pack_start(pix, False)
+    col.set_cell_data_func(pix, lambda _c, cell, model, it, _d: cell.set_property(
+        "pixbuf", icon_for(c, model[it][lv_ncols(c) + 1])))
+    txt = Gtk.CellRendererText()
+    txt.set_property("wrap-mode", Pango.WrapMode.WORD)
+    txt.set_padding(2, 4)
+    col.pack_start(txt, True)
+
+    def markup(_c, cell, model, it, _d):
+        k = lv_ncols(c)
+        parts = [GLib.markup_escape_text(model[it][0])]
+        parts += ['<span alpha="65%">' + GLib.markup_escape_text(model[it][j]) + "</span>"
+                  for j in range(1, k) if model[it][j]]
+        cell.set_property("markup", "\n".join(parts))
+    col.set_cell_data_func(txt, markup)
+    tree.append_column(col)
+    tree.set_headers_visible(False)
+
+
 def lv_build(c, rows=None):
     """(Re)create the store and columns, e.g. after InsertCol/DeleteCol."""
     n = lv_ncols(c)
@@ -499,8 +524,11 @@ def lv_build(c, rows=None):
         tog = Gtk.CellRendererToggle()
         tog.connect("toggled", lambda _r, path: lv_toggle(c, int(path)))
         tree.append_column(Gtk.TreeViewColumn("", tog, active=n))
-    for i in range(n):
-        lv_add_column(c, i)
+    if c.get("tile"):
+        lv_tile_column(c, n)
+    else:
+        for i in range(n):
+            lv_add_column(c, i)
     for r in keep:
         if r < len(store):
             tree.get_selection().select_path(Gtk.TreePath(r))
@@ -743,6 +771,29 @@ def lv_op(c, req):
             cols[i].set_fixed_width(max(int(req["width"]), 1))
             return 1
         return cols[i].get_width() or cols[i].get_fixed_width()
+    if do == "itemrect":
+        # LVM_GETITEMRECT: the row's rectangle in the ListView's client coordinates.  Before the window is
+        # shown GTK hasn't laid rows out, so the height comes from the cell renderers instead.
+        r = int(req["row"])
+        tree = c["tree"]
+        if not 0 <= r < len(store):
+            return None
+        path = Gtk.TreePath(r)
+        area = tree.get_background_area(path, None)
+        if tree.get_mapped() and area.height > 0:
+            x, y = tree.convert_bin_window_to_widget_coords(area.x, area.y)
+            return [x, y, x + area.width, y + area.height]
+        col = tree.get_column(0)
+        it = store.get_iter(path)
+        col.cell_set_cell_data(store, it, False, False)
+        _x, _y, w, h = col.cell_get_size()
+        h += 2 * tree.style_get_property("vertical-separator") if hasattr(tree, "style_get_property") else 0
+        top = 0
+        if tree.get_headers_visible():
+            top = 24
+        alloc_w = tree.get_allocated_width()
+        width = alloc_w if alloc_w > 1 else max(w, int(req.get("width") or 0))
+        return [0, top + r * h, width, top + (r + 1) * h]
     if do == "ensurevisible":
         r = int(req["row"]) - 1
         if not 0 <= r < len(store):
@@ -1487,9 +1538,10 @@ def make(win, cid, t, opts):
         cols = opts.get("columns") or [""]
         tree = Gtk.TreeView()
         c.update(tree=tree, cols=list(cols), colw=[0] * len(cols), coltype=["Text"] * len(cols),
-                 casesens=[False] * len(cols), checked=bool(opts.get("checked")), nosort=bool(opts.get("nosort")))
+                 casesens=[False] * len(cols), checked=bool(opts.get("checked")), nosort=bool(opts.get("nosort")),
+                 tile=bool(opts.get("tile")))
         lv_build(c)
-        tree.set_headers_visible(not opts.get("hdr_off"))
+        tree.set_headers_visible(not opts.get("hdr_off") and not opts.get("tile"))
         tree.set_grid_lines(Gtk.TreeViewGridLines.BOTH if opts.get("grid") else Gtk.TreeViewGridLines.NONE)
         sel = tree.get_selection()
         sel.set_mode(Gtk.SelectionMode.SINGLE if opts.get("multi") is False else Gtk.SelectionMode.MULTIPLE)
@@ -1500,6 +1552,8 @@ def make(win, cid, t, opts):
         tree.connect("button-press-event", lambda _t, e: e.button == 3 and lv_click(c, e))
         w = Gtk.ScrolledWindow()
         w.set_shadow_type(Gtk.ShadowType.IN)
+        if opts.get("tile"):
+            w.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)    # tiles wrap to the control's width
         w.add(tree)
     elif t == "TreeView":
         store = Gtk.TreeStore(str, bool, int, int, int)      # text, checked, item ID, weight, icon
@@ -1946,6 +2000,19 @@ def handle(req):
             set_client_size(win, req.get("w") if req.get("w") is not None else cw,
                             req.get("h") if req.get("h") is not None else ch - win.chrome_h())
         return True
+    if op == "syscolors":
+        # the GTK theme's named colours, for GetSysColor: {name: "rrggbb"}
+        probe = Gtk.Window()
+        ctx = probe.get_style_context()
+        out = {}
+        for name in ("theme_bg_color", "theme_fg_color", "theme_base_color", "theme_text_color",
+                     "theme_selected_bg_color", "theme_selected_fg_color", "insensitive_fg_color",
+                     "link_color", "borders", "theme_unfocused_bg_color"):
+            ok, col = ctx.lookup_color(name)
+            if ok:
+                out[name] = "%02x%02x%02x" % (int(col.red * 255), int(col.green * 255), int(col.blue * 255))
+        probe.destroy()
+        return out
     if op == "caret":
         # caret of the focused text control, in the window's client coordinates (CaretGetPos)
         win = wins[req["win"]]
@@ -2447,5 +2514,20 @@ def main():
     Gtk.main()
 
 
+def _die_with_parent():
+    """End with the script that started us (a killed script must not leave its dialogs or windows behind)."""
+    import ctypes
+    import os
+    import signal
+    try:
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        libc.prctl(1, int(signal.SIGTERM), 0, 0, 0)          # PR_SET_PDEATHSIG
+        if os.getppid() == 1:
+            os._exit(0)                                       # the parent is already gone
+    except (OSError, AttributeError):
+        pass
+
+
 if __name__ == "__main__":
+    _die_with_parent()
     main()

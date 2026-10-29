@@ -103,6 +103,13 @@ def _split(key: str):
 
 
 def _node(key, create=False):
+    k = key.replace("/", "\\").strip("\\")
+    root, _, rest = k.partition("\\")
+    if not create and root.upper() in ("HKCR", "HKEY_CLASSES_ROOT"):
+        # HKEY_CLASSES_ROOT is a merged view: the user's HKCU\Software\Classes keys win over HKLM's
+        user = _node("HKCU\\Software\\Classes" + ("\\" + rest if rest else ""))
+        if user is not None:
+            return user
     d = _load()
     root, rest = _split(key)
     node = d.setdefault(root, {"keys": {}, "values": {}}) if create else d.get(root)

@@ -119,6 +119,8 @@ bhk doctor                 # what BHK can use on this machine
 - **Tray icon, like AutoHotkey on Windows:**
   - Every persistent script gets the pink tray icon, with the script name as its tooltip.
   - The standard menu: **Open** (bold default, double-click), Help, Window Spy, Reload Script, Edit Script, Suspend Hotkeys and Pause Script (both with check marks), Exit.
+  - **Edit Script** (and `Edit()`, and `Run "edit file"`) opens your editor: the one chosen in the Dash's *Editor settings*, otherwise your desktop's default text editor (the `text/plain` application; terminal editors such as nano or micro open in a terminal).
+- **AutoHotkey Dash:** starting Bunny Hot Key from its menu entry or icon without a script opens AutoHotkey's own Dash (New script, Help files, Window spy, Launch settings, Editor settings), as `AutoHotkey64.exe` does on Windows. It comes with the official AutoHotkey release; if none is installed yet, BHK offers to run `bhk install` first. `bhk dash` opens it from a terminal.
   - The icon changes while Suspended or Paused.
   - `A_TrayMenu` is fully scriptable (Add, Insert, Delete, Rename, Check, Enable, Default, ClickCount, AddStandard).
   - `A_IconTip`, `A_IconHidden`, `TraySetIcon` and `#NoTrayIcon` work.

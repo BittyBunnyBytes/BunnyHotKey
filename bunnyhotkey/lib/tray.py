@@ -93,7 +93,7 @@ def _exit():
 
 STANDARD = [("&Open", _open_main), ("&Help", lambda: _xdg_open(HELP_URL)), ("", None),
             ("&Window Spy", _window_spy), ("&Reload Script", _reload),
-            ("&Edit Script", lambda: _xdg_open(rt().script_path)), ("", None),
+            ("&Edit Script", lambda: _edit_script()), ("", None),
             ("&Suspend Hotkeys", _suspend), ("&Pause Script", _pause), ("E&xit", _exit)]
 
 
@@ -197,3 +197,8 @@ def on_event(msg):
         it = m.find_item(m.default, required=False)
         if it is not None:
             m.activate(m.items.index(it))
+
+
+def _edit_script():
+    from .process import edit_file
+    edit_file(rt().script_path)

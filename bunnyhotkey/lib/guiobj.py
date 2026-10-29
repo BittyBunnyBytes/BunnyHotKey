@@ -147,7 +147,7 @@ class GuiObj(AhkObject):
         self.events = {}
         self.event_obj = None
         self.prev = None
-        self.section = (MARGIN_X, MARGIN_Y)
+        self.section = (MARGIN_X, MARGIN_Y, 0)     # x, y, index of its first control
         self.title = ""
         self.shown = False
         self.mx, self.my = MARGIN_X, MARGIN_Y
@@ -304,6 +304,7 @@ def _parse_pos(gui, opts, ctype=""):
     prev = gui.prev
     px, py, pw, ph = (prev.x, prev.y, prev.w, prev.h) if prev else (gui.mx, gui.my - 0, 0, 0)
     x = y = w = h = None
+    dx = dy = None              # the other coordinate's default, set by the option that gave x or y
     rows = None
     flags = {}
     for tok in opts.split():
@@ -312,21 +313,27 @@ def _parse_pos(gui, opts, ctype=""):
         if m and (m.group(2) or m.group(3)):
             axis, mode, num = m.group(1), m.group(2) or "", m.group(3)
             n = int(num) if num else 0
+            # script_gui.cpp ControlParseOptions: each form also sets the other axis's default
             if mode == "m":
                 v = (gui.mx if axis == "x" else gui.my) + n
+                other = ("max", None)
             elif mode == "p":
                 v = (px if axis == "x" else py) + n
+                other = ("same", None) if v != (px if axis == "x" else py) else ("after", None)
             elif mode == "s":
                 v = (gui.section[0] if axis == "x" else gui.section[1]) + n
+                other = ("section", None)
             elif mode in ("+", "-") or (num and num.startswith("+")):
                 base = (px + pw) if axis == "x" else (py + ph)
                 v = base + (n if mode != "-" else -abs(n))
+                other = ("same", None)
             else:
                 v = n
+                other = ("max", None)
             if axis == "x":
-                x = v
+                x, dy = v, other[0]
             else:
-                y = v
+                y, dx = v, other[0]
             continue
         m = re.fullmatch(r"([wh])(p)?([+-]?\d+)?", tl)
         if m and (m.group(2) or m.group(3)):
@@ -389,7 +396,8 @@ def _parse_pos(gui, opts, ctype=""):
         if word in ("section", "hidden", "disabled", "default", "readonly", "password", "multi", "center", "right",
                     "left", "group", "wrap", "vertical", "invert", "tooltip", "number", "lowercase", "uppercase",
                     "grid", "nosort", "nosorthdr", "lines", "buttons", "wanttab", "wantreturn", "check3", "vscroll",
-                    "hscroll", "smooth", "altsubmit", "notab", "border", "sort", "16", "0x80", "8"):
+                    "hscroll", "smooth", "altsubmit", "notab", "border", "sort", "16", "0x80", "8", "tile", "report",
+                    "list", "icon", "iconsmall"):
             flags[word] = not neg
             if word == "check3" and not neg:
                 flags["check3"] = True
@@ -398,13 +406,22 @@ def _parse_pos(gui, opts, ctype=""):
     if x is None and y is None:
         x = prev.x if prev is not None else gui.mx
         y = py + ph + gui.my if prev is not None else gui.my
-    elif x is None:
-        x = (px + pw + gui.mx) if prev is not None else gui.mx
     elif y is None:
-        y = py if prev is not None and x != gui.mx else (py + ph + gui.my if prev else gui.my)
+        down, _ = _extents(gui, gui.section[2] if dy == "section" else 0)
+        y = {"same": py, "after": py + ph + gui.my}.get(dy, down + gui.my)
+    elif x is None:
+        _, right = _extents(gui, gui.section[2] if dx == "section" else 0)
+        x = {"same": px, "after": px + pw + gui.my}.get(dx, right + gui.mx)
     if rows and h is None:
         h = int(rows * LINE_H + 8)
     return x, y, w, h, flags
+
+
+def _extents(gui, since=0):
+    """(furthest bottom, furthest right) of the controls added so far (mMaxExtentDown/Right), or of the
+    current section's."""
+    cs = [c for c in gui.ctrls[since:] if c.ctype != "StatusBar" and c.w is not None and c.h is not None]
+    return (max((c.y + c.h for c in cs), default=0), max((c.x + c.w for c in cs), default=0))
 
 
 def _has_pos(opts):
@@ -518,7 +535,7 @@ def gui_add(this, ctype, options="", text=UNSET):
     if ctrl.bg:
         _srv().call("style", ctrl=ctrl.cid, bg=ctrl.bg)
     if flags.get("section"):
-        this.section = (x, y)
+        this.section = (x, y, len(this.ctrls))
     if "name" in flags:
         ctrl.name = flags["name"]
         this.names[ctrl.name.lower()] = ctrl
@@ -1006,8 +1023,17 @@ def _lv_setimagelist(this, il, which=0):
     old = this.imagelist.get(key, 0)
     this.imagelist[key] = h
     if lst is not None:
+        users = lst.setdefault("users", [])
+        users[:] = [u for u in users if u[0] is not this or u[1] != large] + [(this, large)]
         _srv().call("icons", ctrl=this.cid, paths=list(lst["items"]), large=large and this.ctype == "ListView")
     return old
+
+
+def refresh_imagelist(lst):
+    """An image list is a live handle: icons added after SetImageList appear in its controls too."""
+    for ctrl, large in list(lst.get("users", ())):
+        if ctrl.gui is not None and not getattr(ctrl.gui, "destroyed", False):
+            _srv().call("icons", ctrl=ctrl.cid, paths=list(lst["items"]), large=large and ctrl.ctype == "ListView")
 
 
 def setup():
@@ -1224,6 +1250,17 @@ def _gui_item(this, name):
     if c is None:
         sl = S(name).lower()
         c = next((x for x in this.ctrls if classnn(x).lower() == sl), None)
+    if c is None and S(name) != "":
+        # FindControl -> ControlExist: finally the control's text, as a substring ("OK" finds "&OK")
+        want = S(name)
+        for x in this.ctrls:
+            try:
+                t = ctrl_get(x, "Text")
+            except Exception:
+                continue
+            if isinstance(t, str) and want in t:
+                c = x
+                break
     if c is None:
         throw("Error", "No such control.", S(name))
     return c

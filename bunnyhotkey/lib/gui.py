@@ -395,13 +395,41 @@ def IL_Add(il, filename, icon_number=1, resize=0):
         return 0
     src = S(filename)
     path = picture_path(src)
-    if not path or not os.path.exists(path):
+    themed = _themed_icon(src, rt().to_int(icon_number) if icon_number not in (UNSET, "") else 1)
+    if themed:
+        path = themed
+    elif not path or not os.path.exists(path):
         # Windows icon resources (shell32.dll, ...) have no file here; a generic icon stands in for them
         if not re.search(r"\.(dll|exe|cpl|icl|ocx)$", src, re.I):
             return 0
         path = src
     lst["items"].append(path)
+    if lst.get("users"):
+        from .guiobj import refresh_imagelist
+        refresh_imagelist(lst)
     return len(lst["items"])
+
+
+# Icons of Windows system files -> the desktop's icon theme (freedesktop names); BHK's own icon for A_AhkPath
+_WIN_ICONS = {("imageres.dll", -111): "document-new", ("imageres.dll", -99): "help-browser",
+              ("imageres.dll", -116): "preferences-system", ("imageres.dll", -3): "folder",
+              ("imageres.dll", -2): "text-x-generic", ("imageres.dll", -5): "drive-harddisk",
+              ("shell32.dll", 4): "folder", ("shell32.dll", 1): "text-x-generic", ("shell32.dll", 3): "folder",
+              ("shell32.dll", 24): "help-browser", ("shell32.dll", 22): "preferences-system",
+              ("shell32.dll", 28): "system-shutdown", ("shell32.dll", 44): "starred",
+              ("notepad.exe", 1): "accessories-text-editor", ("explorer.exe", 1): "system-file-manager",
+              ("cmd.exe", 1): "utilities-terminal", ("mmc.exe", 1): "preferences-system"}
+
+
+def _themed_icon(src, number):
+    base = os.path.basename(src.replace("\\", "/")).lower()
+    if src and os.path.realpath(src) == os.path.realpath(rt().bivars["a_ahkpath"][0]()):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(root, "assets", "bunnyhotkey-48.png")
+    name = _WIN_ICONS.get((base, number))
+    if name is None and base in ("imageres.dll", "shell32.dll", "notepad.exe", "explorer.exe"):
+        name = "application-x-executable"
+    return name
 
 
 @export()

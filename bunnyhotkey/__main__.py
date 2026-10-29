@@ -59,8 +59,12 @@ def main(argv=None) -> int:
         elif al == "cp65001" or al.startswith("cp"):
             pass
     if not argv:
-        print(__doc__)
-        return 0
+        if sys.stdin.isatty() or not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            print(__doc__)
+            return 0
+        # started from the menu/desktop icon without a script: AutoHotkey shows its Dash
+        from . import manager
+        return manager.launch_dash()
     cmd = argv[0]
     if cmd in ("install", "versions", "list", "uninstall", "dash", "windowspy", "launcher", "new", "setup-desktop",
                "doctor", "update") and not os.path.exists(cmd):

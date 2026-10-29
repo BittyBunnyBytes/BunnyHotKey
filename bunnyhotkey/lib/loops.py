@@ -182,6 +182,17 @@ def _files(rt, args):
             for full, rel in subdirs:
                 yield from walk(full, rel)
 
+        if pat in (".", ".."):
+            # "dir\.." names a directory itself: one item, its full path resolved (FindFirstFile + GetFullPathName)
+            full = os.path.realpath(os.path.join(base_dir, pat))
+            if want_dirs and os.path.isdir(full):
+                info = FileInfo(full, os.path.basename(full), "", True)
+                info.pattern_dir = os.path.dirname(full)
+                info.sep = "/"
+                li.index = 1
+                li.file = info
+                yield 1
+            return
         for info in walk(base_dir, ""):
             idx += 1
             li.index = idx

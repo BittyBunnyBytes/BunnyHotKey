@@ -91,5 +91,20 @@ def main():
     sys.stdout.write(json.dumps(out))
 
 
+def _die_with_parent():
+    """End with the script that started us (a killed script must not leave its dialogs or windows behind)."""
+    import ctypes
+    import os
+    import signal
+    try:
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+        libc.prctl(1, int(signal.SIGTERM), 0, 0, 0)          # PR_SET_PDEATHSIG
+        if os.getppid() == 1:
+            os._exit(0)                                       # the parent is already gone
+    except (OSError, AttributeError):
+        pass
+
+
 if __name__ == "__main__":
+    _die_with_parent()
     main()

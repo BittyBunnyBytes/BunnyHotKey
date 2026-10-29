@@ -937,7 +937,10 @@ class Parser:
                     return (86, False, "maybe")
                 return (11, True, "ternary")
             if v == ".":
-                if t.ws:
+                # ExpressionToPostfix: a dot followed by a space concatenates; one followed directly by a
+                # name is member access even after a space ("x\n    .Method()" continuation lines)
+                nt = self.peek(1)
+                if t.ws and (nt.ws or nt.kind not in ("id",) and not (nt.kind == "op" and nt.val == "%")):
                     return (CONCAT_BP, False, "concat_dot")
                 return (86, False, "member")
             if v == "(":

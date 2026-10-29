@@ -109,8 +109,10 @@ def DriveSetLabel(drive, label=""):
 
 @export()
 def Edit():
-    subprocess.Popen(["xdg-open", O.RT.script_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return ""
+    """Opens the script in the user's editor (the Dash's Editor settings, else the default text editor);
+    xdg-open would run it, since .ahk files open with Bunny Hot Key."""
+    from .process import edit_file
+    return edit_file(O.RT.script_path)
 
 
 @export()

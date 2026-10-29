@@ -634,6 +634,18 @@ def _listview(c, msg, wp, lp):
             r = _lv(c, "getnext", start=start, mode="")
             return r - 1 if r else -1
         return start if start < _lv(c, "count") else -1                 # LVNI_ALL: the next item
+    if msg == 0x100E:                                                   # LVM_GETITEMRECT
+        rect = _lv(c, "itemrect", row=_s32(wp), width=c.w)
+        if not rect or not lp:
+            return 0
+        from .buffer import resolve
+        data, idx = resolve(lp)
+        struct.pack_into("<4i", data, idx, *[int(v) for v in rect])
+        return 1
+    if msg in (0x10A2, 0x10A4, 0x10A3, 0x10A5):                         # LVM_SET/GETTILEVIEWINFO, SET/GETTILEINFO
+        return 1                                                        # the tile layout is GTK's
+    if msg == 0x108E:                                                   # LVM_SETVIEW
+        return 1
     if msg == 0x1013:                                                   # LVM_ENSUREVISIBLE
         return int(bool(_lv(c, "ensurevisible", row=_s32(wp) + 1)))
     if msg == 0x101D:                                                   # LVM_GETCOLUMNWIDTH
