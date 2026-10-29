@@ -1208,3 +1208,4 @@ EMU.update({
 })
 
 from . import win32emu  # noqa: E402,F401  (registers more of the Win32 API into EMU)
+from . import win32gdi  # noqa: E402,F401  (GDI: DCs, bitmaps, BitBlt)

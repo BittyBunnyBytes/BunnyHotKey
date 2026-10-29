@@ -88,12 +88,6 @@ def _new_handle(obj):
     return h
 
 
-def _close_handle(p):
-    h = _ptr(_arg(p, 0))
-    obj = _handles.pop(h, None)
-    if isinstance(obj, _File):
-        obj.close()
-    return 1
 
 
 # ---------------------------------------------------------------- memory: Global*/Local*/Heap*/VirtualProtect
@@ -610,21 +604,6 @@ def _get_exit_code_process(p):
     return 1
 
 
-def _wait_for_single_object(p):
-    pr = _proc_of(_ptr(_arg(p, 0)))
-    ms = I(_arg(p, 1)) & 0xFFFFFFFF
-    if pr is None:
-        return 0                                        # other objects: signalled
-    end = None if ms == 0xFFFFFFFF else time.monotonic() + ms / 1000
-    while _proc_alive(pr.pid):
-        from .process import _reap
-        _reap()
-        if end is not None and time.monotonic() >= end:
-            return 258                                  # WAIT_TIMEOUT
-        O.RT.sleep(10)
-    return 0                                            # WAIT_OBJECT_0
-
-
 def _terminate_process(p):
     pr = _proc_of(_ptr(_arg(p, 0)))
     if pr is None:
@@ -780,7 +759,7 @@ def _token_information(p):
 
 EMU.update({
     "openprocess": _open_process, "getcurrentprocess": lambda p: -1,
-    "getexitcodeprocess": _get_exit_code_process, "waitforsingleobject": _wait_for_single_object,
+    "getexitcodeprocess": _get_exit_code_process,
     "terminateprocess": _terminate_process,
     "getprocessid": lambda p: (_proc_of(_ptr(_arg(p, 0))) or _Proc(0)).pid,
     "queryfullprocessimagename": lambda p: _image_name(p, 3, 2, True),
@@ -795,7 +774,6 @@ EMU.update({
     "module32firstw": lambda p: _snap_next(p, "m", True), "module32nextw": lambda p: _snap_next(p, "m", False),
     "openprocesstoken": lambda p: (_write_out(_arg(p, 2), "Q", _new_handle("token")), 1)[1],
     "gettokeninformation": _token_information,
-    "closehandle": _close_handle,
 })
 
 
@@ -1042,3 +1020,811 @@ EMU.update({
     "getfiletype": lambda p: 1 if _file_of(p) is not None else 0,      # FILE_TYPE_DISK
     "getfileattributes": _get_file_attributes, "getfullpathname": _full_path_name,
 })
+
+
+# ---------------------------------------------------------------- synchronization: events, mutexes, semaphores
+# Unnamed objects live in this process.  A named object's name is also visible to other BHK scripts (a lock file
+# under $XDG_RUNTIME_DIR held with a shared flock while any handle is open), so the usual single-instance check -
+# CreateMutex then GetLastError() = ERROR_ALREADY_EXISTS - works across scripts, and a named mutex's ownership is
+# an exclusive flock that other scripts wait on.  Events and semaphores signal within one script only.
+ERROR_ALREADY_EXISTS, ERROR_NOT_OWNER, ERROR_TOO_MANY_POSTS = 183, 288, 298
+WAIT_OBJECT_0, WAIT_ABANDONED, WAIT_TIMEOUT, WAIT_FAILED = 0, 0x80, 258, 0xFFFFFFFF
+
+
+def _sync_dir():
+    d = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "bhk-sync-%d" % os.getuid())
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    return d
+
+
+def _lock_path(kind, name):
+    safe = "".join(c if c.isalnum() or c in "-_." else "%%%02X" % ord(c) for c in name.replace("\\", "/"))
+    return os.path.join(_sync_dir(), f"{kind}.{safe}")
+
+
+class _Sync:
+    def __init__(self, kind, name):
+        self.kind, self.name, self.refs = kind, name, 0
+        self.name_fd = self.own_fd = None
+        if name:                                            # announce the name to other processes
+            import fcntl
+            self.name_fd = os.open(_lock_path(kind, name), os.O_RDWR | os.O_CREAT, 0o600)
+            try:
+                fcntl.flock(self.name_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.elsewhere = False
+            except OSError:
+                self.elsewhere = True                       # another script has it open
+            fcntl.flock(self.name_fd, fcntl.LOCK_SH)
+
+    def release_name(self):
+        for fd in (self.name_fd, self.own_fd):
+            if fd is not None:
+                os.close(fd)
+        self.name_fd = self.own_fd = None
+
+
+class _Event(_Sync):
+    def __init__(self, name, manual, state):
+        super().__init__("event", name)
+        self.manual, self.state = manual, state
+
+    def signalled(self):
+        return self.state
+
+    def acquire(self):
+        if not self.manual:
+            self.state = False
+
+
+class _Mutex(_Sync):
+    def __init__(self, name):
+        super().__init__("mutex", name)
+        self.owner, self.count = None, 0
+
+    def _tid(self):
+        return 1                                            # every AutoHotkey thread runs on the one OS thread
+
+    def signalled(self):
+        if self.owner is not None:
+            return self.owner == self._tid()
+        if self.name:                                       # free here; is it free in other scripts too?
+            import fcntl
+            if self.own_fd is None:
+                self.own_fd = os.open(_lock_path("mutex", self.name) + ".owner", os.O_RDWR | os.O_CREAT, 0o600)
+            try:
+                fcntl.flock(self.own_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return False
+        return True
+
+    def acquire(self):
+        self.owner = self._tid()
+        self.count += 1
+
+    def release(self):
+        if self.owner != self._tid():
+            return False
+        self.count -= 1
+        if self.count == 0:
+            self.owner = None
+            if self.own_fd is not None:
+                import fcntl
+                fcntl.flock(self.own_fd, fcntl.LOCK_UN)
+        return True
+
+
+class _Semaphore(_Sync):
+    def __init__(self, name, count, maximum):
+        super().__init__("semaphore", name)
+        self.count, self.max = count, maximum
+
+    def signalled(self):
+        return self.count > 0
+
+    def acquire(self):
+        self.count -= 1
+
+
+_NAMED: dict[tuple, _Sync] = {}
+
+
+def _open_sync(obj_kind, name, make):
+    """A handle to the named object (an existing one in this script, else a new one); sets ERROR_ALREADY_EXISTS."""
+    key = (obj_kind, name)
+    if name and key in _NAMED:
+        obj = _NAMED[key]
+        exists = True
+    else:
+        obj = make()
+        exists = bool(name) and obj.elsewhere
+        if name:
+            _NAMED[key] = obj
+    obj.refs += 1
+    O.RT.last_error = ERROR_ALREADY_EXISTS if exists else 0
+    return obj, _new_handle(obj)
+
+
+def _sync_name(v):
+    from .dllcall import _get_str
+    return _get_str(v) or ""
+
+
+def _create_event(p, ex=False):
+    name = _sync_name(_arg(p, 1 if ex else 3))
+    if ex:
+        flags = I(_arg(p, 2))
+        manual, state = bool(flags & 1), bool(flags & 2)
+    else:
+        manual, state = bool(I(_arg(p, 1))), bool(I(_arg(p, 2)))
+    _obj, h = _open_sync("event", name, lambda: _Event(name, manual, state))
+    return h
+
+
+def _create_mutex(p):
+    return _mutex_common(_sync_name(_arg(p, 2)), bool(I(_arg(p, 1))))
+
+
+def _mutex_common(name, initial_owner):
+    obj, h = _open_sync("mutex", name, lambda: _Mutex(name))
+    err = O.RT.last_error
+    if initial_owner and err != ERROR_ALREADY_EXISTS and obj.signalled():
+        obj.acquire()
+    O.RT.last_error = err
+    return h
+
+
+def _create_semaphore(p):
+    count, maximum = I(_arg(p, 1)), I(_arg(p, 2))
+    name = _sync_name(_arg(p, 3))
+    if maximum <= 0 or not 0 <= count <= maximum:
+        return _fail(ERROR_INVALID_PARAMETER)
+    _obj, h = _open_sync("semaphore", name, lambda: _Semaphore(name, count, maximum))
+    return h
+
+
+def _open_named(p, kind):
+    name = _sync_name(_arg(p, 2))
+    obj = _NAMED.get((kind, name))
+    if obj is None:
+        if not name or not os.path.exists(_lock_path(kind, name)):
+            return _fail(ERROR_FILE_NOT_FOUND)
+        probe = _Sync(kind, name)                           # still open in another script?
+        alive = probe.elsewhere
+        probe.release_name()
+        if not alive:
+            return _fail(ERROR_FILE_NOT_FOUND)
+        obj = {"event": lambda: _Event(name, True, False), "mutex": lambda: _Mutex(name),
+               "semaphore": lambda: _Semaphore(name, 0, 0x7FFFFFFF)}[kind]()
+        _NAMED[(kind, name)] = obj
+    obj.refs += 1
+    O.RT.last_error = 0
+    return _new_handle(obj)
+
+
+def _sync_of(p, cls):
+    obj = _handles.get(_ptr(_arg(p, 0)))
+    return obj if isinstance(obj, cls) else None
+
+
+def _set_event(p, state):
+    ev = _sync_of(p, _Event)
+    if ev is None:
+        return _fail(ERROR_INVALID_HANDLE)
+    ev.state = state
+    return 1
+
+
+def _pulse_event(p):
+    ev = _sync_of(p, _Event)
+    if ev is None:
+        return _fail(ERROR_INVALID_HANDLE)
+    ev.state = False                                        # nobody can be waiting while the script runs here
+    return 1
+
+
+def _release_mutex(p):
+    m = _sync_of(p, _Mutex)
+    if m is None:
+        return _fail(ERROR_INVALID_HANDLE)
+    return 1 if m.release() else _fail(ERROR_NOT_OWNER)
+
+
+def _release_semaphore(p):
+    s = _sync_of(p, _Semaphore)
+    if s is None:
+        return _fail(ERROR_INVALID_HANDLE)
+    n = I(_arg(p, 1))
+    if n <= 0 or s.count + n > s.max:
+        return _fail(ERROR_TOO_MANY_POSTS if n > 0 else ERROR_INVALID_PARAMETER)
+    if not _null(_arg(p, 2)):
+        _write_out(_arg(p, 2), "i", s.count)
+    s.count += n
+    return 1
+
+
+def _waitable(h):
+    """(signalled() -> bool, acquire()) for a handle, or None for an invalid one."""
+    obj = _handles.get(h)
+    if isinstance(obj, (_Event, _Mutex, _Semaphore)):
+        return obj.signalled, obj.acquire
+    pr = _proc_of(h)
+    if pr is not None:
+        def done():
+            from .process import _reap
+            _reap()
+            return not _proc_alive(pr.pid)
+        return done, lambda: None
+    return None
+
+
+def _wait(handles, wait_all, ms, any_input=False):
+    objs = [_waitable(h) for h in handles]
+    if any(o is None for o in objs):
+        return _fail(ERROR_INVALID_HANDLE, WAIT_FAILED)
+    end = None if ms == 0xFFFFFFFF else time.monotonic() + ms / 1000
+    while True:
+        if wait_all:
+            if objs and all(sig() for sig, _a in objs):
+                for _s, acq in objs:
+                    acq()
+                return WAIT_OBJECT_0
+        else:
+            for i, (sig, acq) in enumerate(objs):
+                if sig():
+                    acq()
+                    return WAIT_OBJECT_0 + i
+        if end is not None and time.monotonic() >= end:
+            return WAIT_TIMEOUT
+        # MsgSleep: timers, hotkeys and callbacks keep running (they may signal the objects)
+        O.RT.sleep(10 if end is None else max(0, min(10, int((end - time.monotonic()) * 1000))))
+
+
+def _handle_array(addr, n):
+    return [struct.unpack_from("<Q", _read(addr + 8 * i, 8))[0] for i in range(n)]
+
+
+def _wait_for_single_object(p):
+    h = _ptr(_arg(p, 0))
+    if _waitable(h) is None:
+        return 0                                            # other kernel objects (threads, files): signalled
+    return _wait([h], False, I(_arg(p, 1)) & 0xFFFFFFFF)
+
+
+def _wait_for_multiple(p, msg=False):
+    n = I(_arg(p, 0))
+    hs = _handle_array(_ptr(_arg(p, 1)), n) if n else []
+    r = _wait(hs, bool(I(_arg(p, 2))) and bool(hs), I(_arg(p, 3)) & 0xFFFFFFFF)
+    return r
+
+
+def _close_handle(p):
+    h = _ptr(_arg(p, 0))
+    obj = _handles.pop(h, None)
+    if isinstance(obj, _File):
+        obj.close()
+    elif isinstance(obj, _Sync):
+        obj.refs -= 1
+        if obj.refs <= 0:
+            if isinstance(obj, _Mutex) and obj.owner is not None:
+                obj.count = 1
+                obj.release()                               # abandoned
+            obj.release_name()
+            _NAMED.pop((obj.kind, obj.name), None)
+    return 1
+
+
+EMU.update({
+    "createevent": _create_event, "createeventex": lambda p: _create_event(p, True),
+    "openevent": lambda p: _open_named(p, "event"),
+    "setevent": lambda p: _set_event(p, True), "resetevent": lambda p: _set_event(p, False),
+    "pulseevent": _pulse_event,
+    "createmutex": _create_mutex, "createmutexex": lambda p: _mutex_common(_sync_name(_arg(p, 1)),
+                                                                           bool(I(_arg(p, 2)) & 1)),
+    "openmutex": lambda p: _open_named(p, "mutex"), "releasemutex": _release_mutex,
+    "createsemaphore": _create_semaphore, "opensemaphore": lambda p: _open_named(p, "semaphore"),
+    "releasesemaphore": _release_semaphore,
+    "waitforsingleobject": _wait_for_single_object,
+    "waitforsingleobjectex": _wait_for_single_object,
+    "waitformultipleobjects": _wait_for_multiple, "waitformultipleobjectsex": _wait_for_multiple,
+    "msgwaitformultipleobjects": lambda p: _wait_for_multiple(p, True),
+    "msgwaitformultipleobjectsex": lambda p: _wait([*_handle_array(_ptr(_arg(p, 1)), I(_arg(p, 0)))], False,
+                                                   I(_arg(p, 2)) & 0xFFFFFFFF),
+    "closehandle": _close_handle,
+})
+
+
+# ---------------------------------------------------------------- code pages: MultiByteToWideChar & co.
+ERROR_NO_UNICODE_TRANSLATION, ERROR_INSUFFICIENT_BUFFER = 1113, 122
+_CODEPAGES = {0: "cp1252", 1: "cp437", 2: "cp1252", 3: "cp1252", 437: "cp437", 1200: "utf-16-le",
+              1201: "utf-16-be", 20127: "ascii", 28591: "latin-1", 65000: "utf-7", 65001: "utf-8",
+              936: "gbk", 54936: "gb18030", 20936: "gb2312", 51949: "euc-kr", 20932: "euc-jp", 51932: "euc-jp"}
+
+
+def _codec(cp):
+    name = _CODEPAGES.get(cp) or (f"iso8859-{cp - 28590}" if 28591 < cp <= 28606 else f"cp{cp}")
+    import codecs
+    try:
+        codecs.lookup(name)
+    except LookupError:
+        return None
+    return name
+
+
+def _src_bytes(v, n):
+    """n bytes of a multibyte source (-1: up to and including the NUL)."""
+    if isinstance(v, str) and not v.strip().lstrip("-").isdigit():
+        raw = v.encode("cp1252", "replace")                 # an AStr argument arrives in the ANSI code page
+        return raw + b"\0" if n == -1 else raw[:n]
+    addr = _ptr(v)
+    if n != -1:
+        return _read(addr, n)
+    out = bytearray()
+    while True:
+        chunk = _read(addr + len(out), 256)
+        k = chunk.find(b"\0")
+        if k >= 0:
+            return bytes(out + chunk[:k + 1])
+        out += chunk
+
+
+def _src_wide(v, n):
+    """A UTF-16 source as a str of n code units (-1: up to and including the NUL)."""
+    if isinstance(v, str) and not v.strip().lstrip("-").isdigit():
+        s = v
+    else:
+        addr = _ptr(v)
+        if n == -1:
+            s = _str_arg(addr)
+        else:
+            return _read(addr, 2 * n).decode("utf-16-le", "surrogatepass")
+    units = s.encode("utf-16-le", "surrogatepass")
+    if n == -1:
+        return (units + b"\0\0").decode("utf-16-le", "surrogatepass")
+    return units[:2 * n].decode("utf-16-le", "surrogatepass")
+
+
+def _multibyte_to_wide(p):
+    cp, flags, src, n, dst, cch = I(_arg(p, 0)), I(_arg(p, 1)), _arg(p, 2), I(_arg(p, 3)), _arg(p, 4), I(_arg(p, 5))
+    codec = _codec(cp)
+    if codec is None or n == 0 or cch < 0:
+        return _fail(ERROR_INVALID_PARAMETER)
+    raw = _src_bytes(src, n)
+    try:
+        text = raw.decode(codec, "strict" if flags & 0x8 else "replace")      # MB_ERR_INVALID_CHARS
+    except UnicodeDecodeError:
+        return _fail(ERROR_NO_UNICODE_TRANSLATION)
+    out = text.encode("utf-16-le", "surrogatepass")
+    units = len(out) // 2
+    if cch == 0:
+        return units
+    if units > cch:
+        return _fail(ERROR_INSUFFICIENT_BUFFER)
+    if isinstance(dst, VarRef):
+        dst.cell.value = text.rstrip("\0")
+    else:
+        _write(_ptr(dst), out)
+    return units
+
+
+def _wide_to_multibyte(p):
+    cp, flags, src, n, dst, cb = I(_arg(p, 0)), I(_arg(p, 1)), _arg(p, 2), I(_arg(p, 3)), _arg(p, 4), I(_arg(p, 5))
+    codec = _codec(cp)
+    if codec is None or n == 0 or cb < 0:
+        return _fail(ERROR_INVALID_PARAMETER)
+    text = _src_wide(src, n)
+    used = False
+    if codec.startswith("utf"):
+        try:
+            out = text.encode(codec, "strict" if flags & 0x80 else "replace")  # WC_ERR_INVALID_CHARS
+        except UnicodeEncodeError:
+            return _fail(ERROR_NO_UNICODE_TRANSLATION)
+    else:
+        default = _src_bytes(_arg(p, 6), -1)[:-1] if not _null(_arg(p, 6)) else b"?"
+        parts = []
+        for ch in text:
+            try:
+                parts.append(ch.encode(codec))
+            except UnicodeEncodeError:
+                parts.append(default)
+                used = True
+        out = b"".join(parts)
+    if not _null(_arg(p, 7)):
+        _write_out(_arg(p, 7), "i", int(used))
+    if cb == 0:
+        return len(out)
+    if len(out) > cb:
+        return _fail(ERROR_INSUFFICIENT_BUFFER)
+    _write(_ptr(dst), out)
+    return len(out)
+
+
+# lead-byte ranges of the double-byte code pages (pairs, as CPINFO.LeadByte holds them)
+_LEAD_BYTES = {932: bytes((0x81, 0x9F, 0xE0, 0xFC)), 936: bytes((0x81, 0xFE)), 949: bytes((0x81, 0xFE)),
+               950: bytes((0x81, 0xFE)), 1361: bytes((0x84, 0xD3, 0xD8, 0xDE, 0xE0, 0xF9))}
+
+
+def _cp_info(p):
+    cp = I(_arg(p, 0))
+    codec = _codec(cp)
+    if codec is None:
+        return _fail(ERROR_INVALID_PARAMETER)
+    size = {"utf-8": 4, "utf-7": 5, "utf-16-le": 2, "utf-16-be": 2, "gb18030": 4}.get(codec, 1)
+    lead = _LEAD_BYTES.get(cp, b"")
+    if lead:
+        size = 2
+    _write(_ptr(_arg(p, 1)), struct.pack("<I2s12s", size, b"?\0", lead.ljust(12, b"\0")))
+    return 1
+
+
+EMU.update({
+    "multibytetowidechar": _multibyte_to_wide, "widechartomultibyte": _wide_to_multibyte,
+    "getcpinfo": _cp_info, "isvalidcodepage": lambda p: int(_codec(I(_arg(p, 0))) is not None),
+})
+
+
+# ---------------------------------------------------------------- FormatMessage
+# System message texts as Windows 10 (en-US) words them; each ends with ".\r\n" like the originals.
+_MESSAGES = {
+    0: "The operation completed successfully.", 1: "Incorrect function.",
+    2: "The system cannot find the file specified.", 3: "The system cannot find the path specified.",
+    4: "The system cannot open the file.", 5: "Access is denied.", 6: "The handle is invalid.",
+    8: "Not enough memory resources are available to process this command.",
+    14: "Not enough memory resources are available to complete this operation.",
+    15: "The system cannot find the drive specified.", 18: "There are no more files.",
+    21: "The device is not ready.",
+    32: "The process cannot access the file because it is being used by another process.",
+    33: "The process cannot access the file because another process has locked a portion of the file.",
+    38: "Reached the end of the file.", 50: "The request is not supported.", 80: "The file exists.",
+    87: "The parameter is incorrect.", 111: "The file name is too long.",
+    112: "There is not enough space on the disk.",
+    120: "This function is not supported on this system.",
+    122: "The data area passed to a system call is too small.",
+    123: "The filename, directory name, or volume label syntax is incorrect.",
+    126: "The specified module could not be found.", 127: "The specified procedure could not be found.",
+    145: "The directory is not empty.", 183: "Cannot create a file when that file already exists.",
+    203: "The system could not find the environment option that was entered.",
+    206: "The filename or extension is too long.", 234: "More data is available.",
+    258: "The wait operation timed out.", 259: "No more data is available.",
+    288: "Attempt to release mutex not owned by caller.", 298: "Too many posts were made to a semaphore.",
+    1113: "No mapping for the Unicode character exists in the target multi-byte code page.",
+    1168: "Element not found.", 1223: "The operation was canceled by the user.",
+    1400: "Invalid window handle.", 1401: "Invalid menu handle.", 1413: "Invalid index.",
+    1460: "This operation returned because the timeout period expired.",
+    0x80004001: "Not implemented", 0x80004002: "No such interface supported", 0x80004005: "Unspecified error",
+    0x80070005: "Access is denied.", 0x80070057: "The parameter is incorrect.",
+    0x8007000E: "Not enough memory resources are available to complete this operation.",
+    0x800401F3: "Invalid class string", 0x80040154: "Class not registered",
+}
+ERROR_MR_MID_NOT_FOUND = 317
+FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_IGNORE_INSERTS, FORMAT_MESSAGE_FROM_STRING = 0x100, 0x200, 0x400
+FORMAT_MESSAGE_FROM_HMODULE, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_ARGUMENT_ARRAY = 0x800, 0x1000, 0x2000
+
+
+def _format_inserts(text, flags, args, wide):
+    """Expand %1..%99 (with !printf-format!), %0, %n, %r, %t, %%, %. and %! the way FormatMessage does."""
+    import re
+    width = flags & 0xFF
+    get_arg = None
+    if args:
+        def get_arg(i):
+            return struct.unpack("<Q", _read(args + 8 * (i - 1), 8))[0]
+
+    out, pos, stop = [], 0, False
+    for m in re.finditer(r"%(?:([1-9][0-9]?)(?:!([^!]*)!)?|(.))", text, re.S):
+        out.append(text[pos:m.start()])
+        pos = m.end()
+        if m.group(1):
+            if flags & FORMAT_MESSAGE_IGNORE_INSERTS or get_arg is None:
+                out.append(m.group(0))
+                continue
+            v = get_arg(int(m.group(1)))
+            fmt = m.group(2) or "s"
+            if fmt.endswith(("s", "S")):
+                s = _str_arg(v, wide) if v else "(null)"
+                pre = fmt[:-1]
+                out.append(("%" + pre + "s") % s if pre else s)
+            else:
+                spec = fmt[-1]
+                if spec in "dic":
+                    v = v - (1 << 32) if v & 0x80000000 and v < (1 << 32) else v
+                    if spec == "c":
+                        out.append(chr(v & 0xFFFF))
+                        continue
+                    spec = "d"
+                if spec in "I":
+                    spec = "d"
+                out.append(("%" + fmt[:-1].replace("I64", "").replace("l", "").replace("h", "") + spec) % v)
+            continue
+        c = m.group(3)
+        if c == "0":
+            stop = True
+            break
+        out.append({"n": "\r\n", "r": "\r", "t": "\t", "b": " ", "%": "%", ".": ".", "!": "!"}.get(c, c))
+    if not stop:
+        out.append(text[pos:])
+    s = "".join(out)
+    if width and width != 0xFF:
+        import textwrap
+        s = "\r\n".join(textwrap.wrap(s.replace("\r\n", " "), width))
+    elif width == 0xFF:
+        s = s.replace("\r\n", " ")
+    return s
+
+
+def _format_message(p, wide=True):
+    flags, source, msgid = I(_arg(p, 0)), _arg(p, 1), I(_arg(p, 2)) & 0xFFFFFFFF
+    buf, size, args = _arg(p, 4), I(_arg(p, 5)), _ptr(_arg(p, 6))
+    if flags & FORMAT_MESSAGE_FROM_STRING:
+        text = _str_arg(source, wide)
+    elif flags & (FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_FROM_HMODULE):
+        if msgid & 0xFFFF0000 == 0x80070000 and msgid not in _MESSAGES:
+            msgid &= 0xFFFF                                 # HRESULT_FROM_WIN32
+        if msgid not in _MESSAGES:
+            return _fail(ERROR_MR_MID_NOT_FOUND)
+        text = _MESSAGES[msgid] + "\r\n"
+    else:
+        return _fail(ERROR_INVALID_PARAMETER)
+    if not flags & FORMAT_MESSAGE_ARGUMENT_ARRAY and args:
+        args = 0                                            # a va_list can't be walked here; inserts stay as-is
+        flags |= FORMAT_MESSAGE_IGNORE_INSERTS
+    s = _format_inserts(text, flags, args, wide)
+    raw = s.encode("utf-16-le") + b"\0\0" if wide else s.encode("cp1252", "replace") + b"\0"
+    n = len(s)
+    if flags & FORMAT_MESSAGE_ALLOCATE_BUFFER:
+        mem = _alloc(max(len(raw), size * (2 if wide else 1)), True)
+        ctypes.memmove(mem, raw, len(raw))
+        _write_out(buf, "Q", mem)
+        return n
+    if isinstance(buf, VarRef):
+        buf.cell.value = s
+        return n
+    if n + 1 > size:
+        return _fail(ERROR_INSUFFICIENT_BUFFER)
+    _write(_ptr(buf), raw)
+    return n
+
+
+EMU.update({
+    "formatmessage": _format_message, "formatmessagew": _format_message,
+    "formatmessagea": lambda p: _format_message(p, False),
+})
+
+
+# ---------------------------------------------------------------- DWM, EnumDisplayMonitors, keyboard layout
+S_OK, E_INVALIDARG = 0, 0x80070057
+
+
+def _dwm_attribute(p):
+    from .dllcall import _win
+    from .window import geometry
+    h, attr, out, cb = _hwnd(_arg(p, 0)), I(_arg(p, 1)), _arg(p, 2), I(_arg(p, 3))
+    d, w, c = _win(h)
+    if not w:
+        return 0x80070006                                   # E_HANDLE
+    if attr == 9:                                           # DWMWA_EXTENDED_FRAME_BOUNDS: the visible frame
+        if cb < 16:
+            return E_INVALIDARG
+        x, y, ww, wh = geometry(d, w) if c is None else (0, 0, c.w, c.h)
+        _write(_ptr(out), struct.pack("<4i", x, y, x + ww, y + wh))
+        return S_OK
+    values = {1: 1, 14: 0, 20: 0, 19: 0, 2: 0, 3: 0}       # NCRENDERING_ENABLED, CLOAKED, dark mode, ...
+    if attr not in values or cb < 4:
+        return E_INVALIDARG
+    _write_out(out, "I", values[attr])
+    return S_OK
+
+
+def _enum_display_monitors(p):
+    """EnumDisplayMonitors(hdc, lprcClip, callback, lParam): one call per monitor (that meets the clip rect)."""
+    from .dllcall import call_address
+    clip = _ptr(_arg(p, 1))
+    cb, lp = _ptr(_arg(p, 2)), _ptr(_arg(p, 3))
+    rect = _alloc(16, True)
+    try:
+        for i, (mx, my, mw, mh, *_rest) in enumerate(_monitors()):
+            r = (mx, my, mx + mw, my + mh)
+            if clip:
+                cl, ct, cr, cbm = struct.unpack("<4i", _read(clip, 16))
+                r = (max(r[0], cl), max(r[1], ct), min(r[2], cr), min(r[3], cbm))
+                if r[0] >= r[2] or r[1] >= r[3]:
+                    continue
+            ctypes.memmove(rect, struct.pack("<4i", *r), 16)
+            hdc = _ptr(_arg(p, 0))
+            if not I(call_address(cb, [("Ptr", _MON_BASE + i + 1), ("Ptr", hdc), ("Ptr", rect), ("Ptr", lp)]) or 0):
+                break
+    finally:
+        _free(rect)
+    return 1
+
+
+def _keyboard_layout(p):
+    from .vars_ import _language
+    lang = int(_language(), 16)
+    return lang | lang << 16
+
+
+def _crc32(p):
+    init, addr, n = I(_arg(p, 0)) & 0xFFFFFFFF, _ptr(_arg(p, 1)), I(_arg(p, 2))
+    return zlib.crc32(_read(addr, n), init)
+
+
+def _search_path(p):
+    from .files import ahk_path, host_path
+    path, name, ext = _str_arg(_arg(p, 0)), _str_arg(_arg(p, 1)), _str_arg(_arg(p, 2))
+    n, out = I(_arg(p, 3)), _arg(p, 4)
+    dirs = [host_path(d) for d in path.split(";")] if path else [os.getcwd()] + os.environ.get("PATH", "").split(":")
+    names = [name] + ([name + ext] if ext and "." not in os.path.basename(name) else [])
+    for d in dirs:
+        for nm in reversed(names):
+            full = os.path.join(d, host_path(nm)) if not os.path.isabs(host_path(nm)) else host_path(nm)
+            if os.path.isfile(full):
+                s = ahk_path(full)
+                if n <= len(s):
+                    return len(s) + 1
+                _put_str(out, s)
+                if not _null(_arg(p, 5)):
+                    _write_out(_arg(p, 5), "Q", 0)
+                return len(s)
+    return _fail(ERROR_FILE_NOT_FOUND)
+
+
+# HSTRING (WinRT strings): immutable UTF-16 in native memory
+_HSTRINGS: dict[int, tuple] = {}
+
+
+def _create_hstring(p):
+    s = _src_wide(_arg(p, 0), I(_arg(p, 1))) if not _null(_arg(p, 0)) else ""
+    raw = s.encode("utf-16-le", "surrogatepass")
+    mem = _alloc(len(raw) + 2, True)
+    ctypes.memmove(mem, raw, len(raw))
+    _HSTRINGS[mem] = (mem, len(raw) // 2)
+    _write_out(_arg(p, 2), "Q", mem if raw else 0)
+    if not raw:
+        _HSTRINGS.pop(mem, None)
+        _free(mem)
+    return S_OK
+
+
+def _hstring_buffer(p):
+    h = _ptr(_arg(p, 0))
+    mem, n = _HSTRINGS.get(h, (0, 0))
+    if not _null(_arg(p, 1)):
+        _write_out(_arg(p, 1), "I", n)
+    if not mem:
+        if "empty" not in _HSTRINGS:
+            _HSTRINGS["empty"] = (_alloc(2, True), 0)
+        return _HSTRINGS["empty"][0]
+    return mem
+
+
+def _delete_hstring(p):
+    h = _ptr(_arg(p, 0))
+    if _HSTRINGS.pop(h, None) is not None:
+        _free(h)
+    return S_OK
+
+
+EMU.update({
+    "dwmiscompositionenabled": lambda p: (_write_out(_arg(p, 0), "i", 1), S_OK)[1],
+    "dwmgetwindowattribute": _dwm_attribute,
+    "dwmsetwindowattribute": lambda p: S_OK, "dwmextendframeintoclientarea": lambda p: S_OK,
+    "dwmenableblurbehindwindow": lambda p: S_OK, "dwmflush": lambda p: S_OK,
+    "enumdisplaymonitors": _enum_display_monitors,
+    "getkeyboardlayout": _keyboard_layout,
+    "rtlcomputecrc32": _crc32,
+    "searchpath": _search_path,
+    "netapibufferfree": lambda p: (_free(_ptr(_arg(p, 0))), 0)[1],
+    "getconsolewindow": lambda p: 0, "freeconsole": lambda p: 1,
+    "attachconsole": lambda p: _fail(ERROR_INVALID_HANDLE),
+    "processidtosessionid": lambda p: (_write_out(_arg(p, 1), "I", 1), 1)[1] if _proc_alive(I(_arg(p, 0)))
+    else _fail(ERROR_INVALID_PARAMETER),
+    "getpriorityclass": lambda p: 0x20 if _proc_of(_ptr(_arg(p, 0))) is not None else _fail(ERROR_INVALID_HANDLE),
+    "windowscreatestring": _create_hstring, "windowsdeletestring": _delete_hstring,
+    "windowsgetstringrawbuffer": _hstring_buffer,
+    "windowsgetstringlen": lambda p: _HSTRINGS.get(_ptr(_arg(p, 0)), (0, 0))[1],
+})
+
+
+# ---------------------------------------------------------------- SetWinEventHook (out-of-context events)
+# X11 has no WinEvents, so the hooks are fed by watching the window list every 100 ms: foreground changes,
+# windows created/destroyed/shown/hidden, title changes, moves/resizes and minimize start/end.
+EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND = 0x3, 0x16, 0x17
+EVENT_OBJECT_CREATE, EVENT_OBJECT_DESTROY, EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE = 0x8000, 0x8001, 0x8002, 0x8003
+EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_NAMECHANGE = 0x800B, 0x800C
+_HOOKS: dict[int, tuple] = {}
+_hook_ids = itertools.count(0x5E000)
+_WATCH = {"timer": None, "state": None}
+
+
+def _snapshot():
+    from .window import _dpy, active_window, client_list, geometry, is_visible, pid_of, title_of
+    d = _dpy()
+    if d is None:
+        return None
+    wins = {}
+    hidden = d.atom("_NET_WM_STATE_HIDDEN")
+    for w in client_list(d, True):
+        try:
+            wins[w] = {"title": title_of(d, w), "geo": geometry(d, w), "visible": is_visible(d, w),
+                       "min": hidden in d.get_longs(w, "_NET_WM_STATE"), "pid": pid_of(d, w)}
+        except Exception:
+            continue
+    return {"active": active_window(d), "wins": wins}
+
+
+def _poll_win_events():
+    old = _WATCH["state"]
+    new = _snapshot()
+    if new is None:
+        return ""
+    _WATCH["state"] = new
+    if old is None:
+        return ""
+    events = []
+    ow, nw = old["wins"], new["wins"]
+    for w in nw.keys() - ow.keys():
+        events.append((EVENT_OBJECT_CREATE, w))
+        if nw[w]["visible"]:
+            events.append((EVENT_OBJECT_SHOW, w))
+    for w in ow.keys() - nw.keys():
+        events.append((EVENT_OBJECT_DESTROY, w))
+    for w in nw.keys() & ow.keys():
+        a, b = ow[w], nw[w]
+        if a["visible"] != b["visible"]:
+            events.append((EVENT_OBJECT_SHOW if b["visible"] else EVENT_OBJECT_HIDE, w))
+        if a["min"] != b["min"]:
+            events.append((EVENT_SYSTEM_MINIMIZESTART if b["min"] else EVENT_SYSTEM_MINIMIZEEND, w))
+        if a["title"] != b["title"]:
+            events.append((EVENT_OBJECT_NAMECHANGE, w))
+        if a["geo"] != b["geo"]:
+            events.append((EVENT_OBJECT_LOCATIONCHANGE, w))
+    if new["active"] != old["active"] and new["active"]:
+        events.append((EVENT_SYSTEM_FOREGROUND, new["active"]))
+    from .dllcall import call_address
+    now = int(time.monotonic() * 1000) & 0xFFFFFFFF
+    for ev, w in events:
+        pid = (nw.get(w) or ow.get(w) or {}).get("pid", 0)
+        for hid, (mn, mx, cb, want_pid, flags) in list(_HOOKS.items()):
+            if not mn <= ev <= mx or (want_pid and want_pid != pid):
+                continue
+            if flags & 0x2 and pid == os.getpid():          # WINEVENT_SKIPOWNPROCESS
+                continue
+            call_address(cb, [("Ptr", hid), ("UInt", ev), ("Ptr", w), ("Int", 0), ("Int", 0),
+                              ("UInt", pid), ("UInt", now)])
+    return ""
+
+
+def _set_win_event_hook(p):
+    mn, mx, cb = I(_arg(p, 0)), I(_arg(p, 1)), _ptr(_arg(p, 3))
+    pid, flags = I(_arg(p, 4)), I(_arg(p, 6))
+    if not cb or mn > mx:
+        return _fail(ERROR_INVALID_PARAMETER)
+    hid = next(_hook_ids) * 4
+    _HOOKS[hid] = (mn, mx, cb, pid, flags)
+    if _WATCH["timer"] is None:
+        from .flow import Timer
+        from ..objects import BuiltinFunc
+
+        class _HookTimer(Timer):
+            __slots__ = ()
+            background = True                               # doesn't keep the script running by itself
+        t = _HookTimer(BuiltinFunc("WinEventHook", _poll_win_events, 0, 0), 100, 0)
+        _WATCH["timer"] = t
+        _WATCH["state"] = _snapshot()
+        O.RT.timers.append(t)
+    return hid
+
+
+def _unhook_win_event(p):
+    if _HOOKS.pop(_ptr(_arg(p, 0)), None) is None:
+        return 0
+    if not _HOOKS and _WATCH["timer"] is not None:
+        t = _WATCH["timer"]
+        t.enabled = False
+        if t in O.RT.timers:
+            O.RT.timers.remove(t)
+        _WATCH["timer"] = _WATCH["state"] = None
+    return 1
+
+
+EMU.update({"setwineventhook": _set_win_event_hook, "unhookwinevent": _unhook_win_event})

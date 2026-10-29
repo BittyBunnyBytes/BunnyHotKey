@@ -115,7 +115,8 @@ def image_search(outx, outy, x1, y1, x2, y2, spec):
             if trans is None and c:
                 trans = int(c, 16)
     try:
-        with open(host_path(path), "rb") as fh:
+        from .gui import picture_path
+        with open(picture_path(path), "rb") as fh:
             data = fh.read()
         iw, ih, img = _decode_png(data) if data[:4] == b"\x89PNG" else _decode_bmp(data)
     except (OSError, ValueError, KeyError) as e:

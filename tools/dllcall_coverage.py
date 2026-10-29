@@ -6,7 +6,8 @@
 CORPUS_DIR is a checkout made by tests/validate_corpus.sh (the 337-script v2 corpus).  Every
 DllCall("dll\\Function") / DllCall("Function") with a literal name is counted once per script that uses
 it ("uses"); calls into Linux .so files and by address aren't Win32 and aren't counted.  The result goes
-into docs/parity.json ("dllcall") for the chart.
+into docs/parity.json ("dllcall"), and the functions that two or more scripts call are written to
+tools/win32_demand.txt: the chart's DllCall row is the share of those that a passing run test calls.
 """
 import collections
 import importlib
@@ -67,6 +68,11 @@ def main():
         for k in sorted(uses, key=lambda k: -len(uses[k]))[:60]:
             if not ok(k):
                 print(f"  missing {k}: {len(uses[k])} scripts")
+    demand = sorted((k for k in uses if len(uses[k]) >= 2), key=lambda k: (-len(uses[k]), k))
+    with open(os.path.join(ROOT, "tools", "win32_demand.txt"), "w", encoding="utf-8") as fh:
+        fh.write("# Win32 functions that 2+ scripts of the v2 corpus call through DllCall (scripts, name);\n"
+                 "# regenerate with tools/dllcall_coverage.py CORPUS_DIR\n")
+        fh.writelines(f"{len(uses[k])} {k}\n" for k in demand)
     p = os.path.join(ROOT, "docs", "parity.json")
     data = json.load(open(p, encoding="utf-8"))
     data["dllcall"] = {"covered": covered, "total": total}

@@ -111,6 +111,7 @@ def run_tested():
         if f.endswith(".ahk") and not f.startswith("v1_"):          # v2 regression scripts (tests/run.py)
             texts.append(open(os.path.join(ROOT, "tests", "scripts", f), encoding="utf-8").read())
     src = _strip_comments("\n".join(texts))
+    _RESULTS["_src"] = src
     names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_builtins.txt")) if l.strip() and not l.startswith("#")]
     covered = set()
     for n in names:
@@ -121,8 +122,25 @@ def run_tested():
     return covered
 
 
+def dllcall_tested():
+    """(run-tested, demanded): the Win32 functions that 2+ corpus scripts call (tools/win32_demand.txt) and
+    those of them a passing run test calls through DllCall."""
+    run_tested()                                        # runs the suites once
+    called = set()
+    for m in re.finditer(r"DllCall\(\s*[\"']([^\"']+)[\"']", _RESULTS["_src"], re.I):
+        name = m.group(1).replace("/", "\\").rpartition("\\")[2].lower()
+        called.update({name, name.rstrip("w").rstrip("a") if name.endswith(("w", "a")) else name})
+    demand = [l.split()[1] for l in open(os.path.join(ROOT, "tools", "win32_demand.txt"), encoding="utf-8")
+              if l.strip() and not l.startswith("#")]
+    hit = [n for n in demand if n in called or (n.endswith(("w", "a")) and n[:-1] in called)]
+    return hit, demand
+
+
 def measure(spec, cls, data):
     kind, _, group = spec.partition(":")
+    if kind == "dllcall":
+        hit, demand = dllcall_tested()
+        return round(100 * len(hit) / len(demand)), {"covered": len(hit), "count": len(demand)}
     if kind == "suite":
         res = suite_results(group)
         ok = sum(1 for _, passed in res if passed)

@@ -853,7 +853,7 @@ class Runtime:
     def is_persistent(self):
         if self.persistent:
             return True
-        if self.timers and any(t.enabled for t in self.timers):
+        if self.timers and any(t.enabled and not getattr(t, "background", False) for t in self.timers):
             return True
         if self.hotkeys is not None and self.hotkeys.hotkeys:
             return True

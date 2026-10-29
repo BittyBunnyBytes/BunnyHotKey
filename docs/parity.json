@@ -74,6 +74,11 @@
       "measure": "suite:v2_com"
     },
     {
+      "area": "DllCall (Win32 API)",
+      "measure": "dllcall:demand",
+      "note": "{covered} of {count} Win32 functions real scripts use, run-tested"
+    },
+    {
       "area": "Wayland input",
       "percent": 0,
       "note": "not supported (no backend to test)"
@@ -123,7 +128,7 @@
     "total": 327
   },
   "dllcall": {
-    "covered": 617,
+    "covered": 815,
     "total": 8079
   }
 }

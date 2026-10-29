@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="920" height="728" viewBox="0 0 920 728" font-family="Segoe UI, Helvetica, Arial, sans-serif">
-<rect width="920" height="728" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="758" viewBox="0 0 920 758" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="920" height="758" rx="12" fill="#ffffff" stroke="#d0d7de"/>
 <text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">Bunny Hot Key - parity with AutoHotkey v2 and v1</text>
 <text x="20" y="56" font-size="12.5" fill="#59636e">Pass rates of run tests (tests/conformance; built-ins: share called by a passing test). Details: docs/PARITY.md</text>
 <text x="20" y="89" font-size="13" fill="#1f2328">Language syntax &amp; semantics (v2.0)</text>
@@ -67,41 +67,46 @@
 <rect x="300" y="437" width="264.0" height="16" rx="4" fill="#d4a72c"/>
 <text x="640" y="449" font-size="13" font-weight="700" fill="#d4a72c">80%</text>
 <text x="685" y="449" font-size="11.5" fill="#59636e">20 of 25 checks incl. Windows' own servers</text>
-<text x="20" y="479" font-size="13" fill="#1f2328">Wayland input</text>
+<text x="20" y="479" font-size="13" fill="#1f2328">DllCall (Win32 API)</text>
 <rect x="300" y="467" width="330" height="16" rx="4" fill="#eef1f4"/>
-<text x="640" y="479" font-size="13" font-weight="700" fill="#cf222e">0%</text>
-<text x="685" y="479" font-size="11.5" fill="#59636e">not supported (no backend to test)</text>
-<line x1="20" y1="498" x2="900" y2="498" stroke="#d0d7de"/>
-<text x="20" y="516" font-size="13.5" font-weight="700" fill="#1f2328">AutoHotkey v1 (compatibility frontend - docs/V1.md)</text>
-<text x="20" y="539" font-size="13" fill="#1f2328">Public v1 scripts that load</text>
-<rect x="300" y="527" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="527" width="320.1" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="539" font-size="13" font-weight="700" fill="#2da44e">97%</text>
-<text x="685" y="539" font-size="11.5" fill="#59636e">318 of 327 from 11 repos (V1_CORPUS.md)</text>
-<text x="20" y="569" font-size="13" fill="#1f2328">v1 hotkey syntax &amp; #If directives</text>
+<rect x="300" y="467" width="122.1" height="16" rx="4" fill="#cf222e"/>
+<text x="640" y="479" font-size="13" font-weight="700" fill="#cf222e">37%</text>
+<text x="685" y="479" font-size="11.5" fill="#59636e">131 of 351 Win32 functions real scripts use, run-tested</text>
+<text x="20" y="509" font-size="13" fill="#1f2328">Wayland input</text>
+<rect x="300" y="497" width="330" height="16" rx="4" fill="#eef1f4"/>
+<text x="640" y="509" font-size="13" font-weight="700" fill="#cf222e">0%</text>
+<text x="685" y="509" font-size="11.5" fill="#59636e">not supported (no backend to test)</text>
+<line x1="20" y1="528" x2="900" y2="528" stroke="#d0d7de"/>
+<text x="20" y="546" font-size="13.5" font-weight="700" fill="#1f2328">AutoHotkey v1 (compatibility frontend - docs/V1.md)</text>
+<text x="20" y="569" font-size="13" fill="#1f2328">Public v1 scripts that load</text>
 <rect x="300" y="557" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="557" width="330.0" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="569" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="569" font-size="11.5" fill="#59636e">16 of 16 checks with real X11 input</text>
-<text x="20" y="599" font-size="13" fill="#1f2328">v1 commands (comma syntax)</text>
+<rect x="300" y="557" width="320.1" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="569" font-size="13" font-weight="700" fill="#2da44e">97%</text>
+<text x="685" y="569" font-size="11.5" fill="#59636e">318 of 327 from 11 repos (V1_CORPUS.md)</text>
+<text x="20" y="599" font-size="13" fill="#1f2328">v1 hotkey syntax &amp; #If directives</text>
 <rect x="300" y="587" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="587" width="330.0" height="16" rx="4" fill="#2da44e"/>
 <text x="640" y="599" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="599" font-size="11.5" fill="#59636e">186 of 186: all v1.1 commands</text>
-<text x="20" y="629" font-size="13" fill="#1f2328">v1 language (If var =, Gosub, objects)</text>
+<text x="685" y="599" font-size="11.5" fill="#59636e">16 of 16 checks with real X11 input</text>
+<text x="20" y="629" font-size="13" fill="#1f2328">v1 commands (comma syntax)</text>
 <rect x="300" y="617" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="617" width="330.0" height="16" rx="4" fill="#2da44e"/>
 <text x="640" y="629" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="629" font-size="11.5" fill="#59636e">188 of 188 checks (tests/conformance)</text>
-<text x="20" y="659" font-size="13" fill="#1f2328">v1 Gui (Gui, GuiControl, LV_/TV_/SB_)</text>
+<text x="685" y="629" font-size="11.5" fill="#59636e">186 of 186: all v1.1 commands</text>
+<text x="20" y="659" font-size="13" fill="#1f2328">v1 language (If var =, Gosub, objects)</text>
 <rect x="300" y="647" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="647" width="330.0" height="16" rx="4" fill="#2da44e"/>
 <text x="640" y="659" font-size="13" font-weight="700" fill="#2da44e">100%</text>
-<text x="685" y="659" font-size="11.5" fill="#59636e">91 of 91 checks (tests/conformance)</text>
-<rect x="20" y="691" width="12" height="12" rx="3" fill="#2da44e"/>
-<text x="38" y="702" font-size="12" fill="#1f2328">90%+ complete</text>
-<rect x="210" y="691" width="12" height="12" rx="3" fill="#d4a72c"/>
-<text x="228" y="702" font-size="12" fill="#1f2328">partial: 60-89%</text>
-<rect x="400" y="691" width="12" height="12" rx="3" fill="#cf222e"/>
-<text x="418" y="702" font-size="12" fill="#1f2328">missing / left to do</text>
+<text x="685" y="659" font-size="11.5" fill="#59636e">188 of 188 checks (tests/conformance)</text>
+<text x="20" y="689" font-size="13" fill="#1f2328">v1 Gui (Gui, GuiControl, LV_/TV_/SB_)</text>
+<rect x="300" y="677" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="677" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="689" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="689" font-size="11.5" fill="#59636e">91 of 91 checks (tests/conformance)</text>
+<rect x="20" y="721" width="12" height="12" rx="3" fill="#2da44e"/>
+<text x="38" y="732" font-size="12" fill="#1f2328">90%+ complete</text>
+<rect x="210" y="721" width="12" height="12" rx="3" fill="#d4a72c"/>
+<text x="228" y="732" font-size="12" fill="#1f2328">partial: 60-89%</text>
+<rect x="400" y="721" width="12" height="12" rx="3" fill="#cf222e"/>
+<text x="418" y="732" font-size="12" fill="#1f2328">missing / left to do</text>
 </svg>

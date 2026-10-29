@@ -383,7 +383,11 @@ def picture_path(spec):
     """File path for a Picture/IL_Add source: a file, or an HBITMAP:/HICON: handle from LoadPicture."""
     m = re.fullmatch(r"\s*(?:hbitmap|hicon):\*?(\d+)\s*", spec, re.I)
     if m:
-        return PICTURES.get(int(m.group(1)), "")
+        h = int(m.group(1))
+        if h not in PICTURES:                               # a bitmap drawn with GDI through DllCall
+            from .win32gdi import png_of
+            return png_of(h) or ""
+        return PICTURES[h]
     from .files import host_path
     return host_path(spec) if spec else ""
 
