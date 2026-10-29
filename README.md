@@ -13,8 +13,9 @@
 
 <p align="center"><img src="assets/parity.svg" alt="Parity with AutoHotkey v2 by area: language 99%, built-in functions 88%, Gui 65%, COM and Wayland 0%" width="860"></p>
 
+<!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
-**88% of its built-in function API** is reproduced (271 full, 63 partial, 11 missing).
+**88% of its built-in function API** is reproduced (270 full, 63 partial, 11 missing).
 
 **Missing or left to do:**
 - **COM/ActiveX:** Windows-only.
@@ -24,6 +25,7 @@
 - **Some DllCalls.**
 
 The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
+<!-- parity:summary:end -->
 
 
 Run **AutoHotkey v2** scripts natively on **Linux (X11)**.

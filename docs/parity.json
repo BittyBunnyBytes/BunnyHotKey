@@ -1,0 +1,29 @@
+{
+  "_help": "Edit this file, then run: python3 tools/parity_chart.py  (redraws assets/parity.svg and the summaries in README.md and docs/PARITY.md). Areas with \"measure\" are computed automatically; the others use \"percent\". Order here = order in the chart.",
+  "title": "Bunny Hot Key - parity with AutoHotkey v2",
+  "subtitle": "Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md",
+  "corpus": {"loaded": 243, "total": 246, "repos": 7},
+  "areas": [
+    {"area": "Language syntax & semantics (v2.0)", "percent": 99, "note": "all v2.0 constructs; regression suite"},
+    {"area": "Real-world v2 scripts that load", "measure": "corpus", "note": "{loaded} of {total} from {repos} repos"},
+    {"area": "Strings / RegEx / Math / Dates", "measure": "builtins:strings", "note": "{full} of {count} functions"},
+    {"area": "Keyboard & mouse functions", "measure": "builtins:input", "note": "Send, Click, Hotkey(), InputHook..."},
+    {"area": "Process / Run / System", "measure": "builtins:process", "note": "Run, Process*, Env*, Sound*, Reg*"},
+    {"area": "Files / Dirs / INI", "measure": "builtins:files", "note": "Drive* metadata partial"},
+    {"area": "Window functions (Win*)", "measure": "builtins:window", "note": "EWMH; WinGetText/regions partial"},
+    {"area": "Tray icon & menu", "percent": 95, "note": "XFCE live; Cinnamon via XApp monitor"},
+    {"area": "Hotkeys & hotstrings (X11)", "percent": 90, "note": "bare modifiers not suppressible"},
+    {"area": "All built-in functions", "measure": "builtins:all", "note": "{full} full, {partial} partial, {missing} missing"},
+    {"area": "Gui", "percent": 65, "note": "15 of 23 control types"},
+    {"area": "Win32 controls (Control*, Edit*)", "measure": "builtins:controls", "note": "no Win32 controls on Linux"},
+    {"area": "COM / ActiveX", "percent": 0, "note": "Windows-only"},
+    {"area": "Wayland input", "percent": 0, "note": "dropped for now"}
+  ],
+  "missing": [
+    "**COM/ActiveX:** Windows-only.",
+    "**Wayland input:** dropped for now.",
+    "**Gui:** 8 control types to go (TreeView, Tab, UpDown, Hotkey, DateTime, MonthCal, ActiveX, Custom).",
+    "**Reading other apps' Win32 controls** (`ControlGetText` and similar).",
+    "**Some DllCalls.**"
+  ]
+}

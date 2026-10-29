@@ -4,17 +4,23 @@
 
 ## How it's measured
 - **Built-in functions:** every name in AutoHotkey v2.0.31's own function table
-  (`script.cpp` BIF table, `lib/functions.h`, `g_act`), 345 entries.
+  (`script.cpp` BIF table, `lib/functions.h`, `g_act`; listed in `tools/ahk_builtins.txt`).
   - *Full* means BHK implements the documented behaviour.
   - *Partial* means it exists but returns a fixed or approximate result, usually because the Windows concept has no Linux equivalent.
   - *Missing* means it raises a clear "Windows-only" error.
-  - Result: **271 full, 63 partial, 11 missing (88%)**.
+  - <!-- parity:counts:start -->
+Result: **270 full, 63 partial, 11 missing (88%)** of 344 built-ins.
+<!-- parity:counts:end -->
 - **Language:** the regression suite (`tests/run.py`), with expected outputs
   checked line by line against the C++ source, plus 246 real-world scripts
   (`docs/COMPATIBILITY.md`): **243 load (99%)**.
 - **Other areas:** feature lists from AutoHotkey's documentation, with each
   feature counted as full, partial or missing.
-- Regenerate the chart with `python3 tools/parity_chart.py`.
+- **Updating the chart:** edit `docs/parity.json` (areas, notes, hand-scored
+  percentages, the "missing" list), then run `python3 tools/parity_chart.py`.
+  - Built-in scores are measured automatically against `tools/ahk_builtins.txt`.
+  - That list can be regenerated from an AutoHotkey source checkout with `tools/extract_ahk_builtins.sh`.
+  - The script redraws `assets/parity.svg` and rewrites the marked summary blocks in `README.md` and this file.
 
 ## What's missing or left to do
 | Area | Status | What's left |
