@@ -246,9 +246,24 @@ def Ord(s):
     return ord(s[0]) if s else 0
 
 
+_STR_BUFS: dict[str, object] = {}
+
+
 @export()
 def StrPtr(s):
-    return id(s)
+    """Address of a UTF-16 copy of the string, readable with StrGet/NumGet (Bunny Hot Key strings are Python
+    strings, so writes through the pointer don't change the variable)."""
+    from .buffer import BufferObj
+    s = S(s)
+    b = _STR_BUFS.get(s)
+    if b is None:
+        if len(_STR_BUFS) > 4096:
+            _STR_BUFS.clear()
+        raw = s.encode("utf-16-le") + b"\0\0"
+        b = BufferObj(len(raw))
+        b.data[:] = raw
+        _STR_BUFS[s] = b
+    return b.addr
 
 
 @export()

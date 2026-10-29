@@ -153,7 +153,8 @@ def register_vars(rt):
     ro("A_IconFile", lambda: "")
     ro("A_IconNumber", lambda: "")
     rw("A_TrayMenu", lambda: _tray(rt), None)
-    rw("A_ListLines", lambda: 0, lambda v: None)
+    rw("A_ListLines", lambda: int(getattr(rt.thread.settings, "list_lines", 1)),
+       lambda v: setattr(rt.thread.settings, "list_lines", 1 if to_bool(v) else 0))
 
     # screen / system
     ro("A_ScreenWidth", lambda: window.screen_size()[0])

@@ -65,6 +65,21 @@ for _name in ("DriveLock", "DriveUnlock", "DriveRetract"):
 
 @export()
 def DriveSetLabel(drive, label=""):
+    """Relabel the filesystem holding the drive with the matching tool (e2label, fatlabel, ntfslabel, ...).
+    Changing a mounted filesystem's label usually needs root, as on Windows it needs admin rights."""
+    from .files import _drive_path, mount_of
+    dev, mnt, fs = mount_of(_drive_path(drive))
+    new = O.RT.to_str(label)
+    tools = {"ext2": ["e2label", dev, new], "ext3": ["e2label", dev, new], "ext4": ["e2label", dev, new],
+             "vfat": ["fatlabel", dev, new], "exfat": ["exfatlabel", dev, new], "ntfs": ["ntfslabel", dev, new],
+             "ntfs3": ["ntfslabel", dev, new], "fuseblk": ["ntfslabel", dev, new],
+             "btrfs": ["btrfs", "filesystem", "label", mnt, new], "xfs": ["xfs_admin", "-L", new or "--", dev]}
+    argv = tools.get(fs)
+    if argv is None or not shutil.which(argv[0]):
+        throw("OSError", f"Can't change the label of a {fs or 'unknown'} filesystem on this system.", O.RT.to_str(drive))
+    r = subprocess.run(argv, capture_output=True, text=True)
+    if r.returncode != 0:
+        throw("OSError", (r.stderr.strip() or "Access is denied.").splitlines()[0], O.RT.to_str(drive))
     return ""
 
 
@@ -105,11 +120,6 @@ def SysGetIPAddresses():
         except OSError:
             pass
     return AhkArray(None, addrs)
-
-
-@export()
-def ObjFromPtrAddRef(ptr):
-    throw("Error", "Object pointers are not supported by Bunny Hot Key.", "ObjFromPtrAddRef")
 
 
 for _name in ("ComObjConnect", "ComObjFlags", "ComObjFromPtr", "ComObjQuery", "ComObjType", "ComObjValue"):

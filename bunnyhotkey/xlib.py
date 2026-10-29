@@ -150,6 +150,7 @@ def _setup(x):
         ("XMapWindow", c_int, [c_void_p, Window]),
         ("XUnmapWindow", c_int, [c_void_p, Window]),
         ("XRaiseWindow", c_int, [c_void_p, Window]),
+        ("XClearArea", c_int, [c_void_p, Window, c_int, c_int, c_uint, c_uint, c_int]),
         ("XIconifyWindow", c_int, [c_void_p, Window, c_int]),
         ("XKillClient", c_int, [c_void_p, c_ulong]),
         ("XMoveResizeWindow", c_int, [c_void_p, Window, c_int, c_int, c_uint, c_uint]),
@@ -309,3 +310,37 @@ def display() -> Display:
         if _main_display is None:
             _main_display = Display()
         return _main_display
+
+
+class XRRMonitorInfo(ctypes.Structure):
+    _fields_ = [("name", c_ulong), ("primary", c_int), ("automatic", c_int), ("noutput", c_int), ("x", c_int),
+                ("y", c_int), ("width", c_int), ("height", c_int), ("mwidth", c_int), ("mheight", c_int),
+                ("outputs", c_void_p)]
+
+
+def monitors(d):
+    """[(name, x, y, w, h, primary)] from XRandR 1.5 (XRRGetMonitors); [] if unavailable."""
+    xr = _lib("Xrandr")
+    if xr is None or d is None or not hasattr(xr, "XRRGetMonitors"):
+        return []
+    xr.XRRGetMonitors.restype = ctypes.POINTER(XRRMonitorInfo)
+    xr.XRRGetMonitors.argtypes = [c_void_p, c_ulong, c_int, ctypes.POINTER(c_int)]
+    xr.XRRFreeMonitors.argtypes = [c_void_p]
+    d.x.XGetAtomName.restype = c_void_p
+    d.x.XGetAtomName.argtypes = [c_void_p, c_ulong]
+    d.x.XFree.argtypes = [c_void_p]
+    n = c_int()
+    arr = xr.XRRGetMonitors(d.dpy, d.root, 1, ctypes.byref(n))
+    if not arr:
+        return []
+    out = []
+    for i in range(n.value):
+        m = arr[i]
+        p = d.x.XGetAtomName(d.dpy, m.name) if m.name else None
+        name = ctypes.string_at(p).decode(errors="replace") if p else ""
+        if p:
+            d.x.XFree(p)
+        out.append((name, m.x, m.y, m.width, m.height, bool(m.primary)))
+    xr.XRRFreeMonitors(arr)
+    return out
+

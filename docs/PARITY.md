@@ -9,11 +9,11 @@
   - *Partial* means it exists but returns a fixed or approximate result, usually because the Windows concept has no Linux equivalent.
   - *Missing* means it raises a clear "Windows-only" error.
   - <!-- parity:counts:start -->
-Result: **270 full, 63 partial, 11 missing (88%)** of 344 built-ins.
+Result: **332 full, 3 partial, 9 missing (97%)** of 344 built-ins.
 <!-- parity:counts:end -->
 - **Language:** the regression suite (`tests/run.py`), with expected outputs
-  checked line by line against the C++ source, plus 246 real-world scripts
-  (`docs/COMPATIBILITY.md`): **243 load (99%)**.
+  checked line by line against the C++ source, plus 337 real-world scripts
+  (`docs/COMPATIBILITY.md`): **327 of 337 load**; the rest are v1 files or templates.
 - **Other areas:** feature lists from AutoHotkey's documentation, with each
   feature counted as full, partial or missing.
 - **Updating the chart:** edit `docs/parity.json` (areas, notes, hand-scored
@@ -25,14 +25,16 @@ Result: **270 full, 63 partial, 11 missing (88%)** of 344 built-ins.
 ## What's missing or left to do
 | Area | Status | What's left |
 |---|---|---|
-| COM / ActiveX | ❌ missing | `ComObject`, `ComObjActive`, `ComObjGet`, `ComCall`, `ComObj*` (11 functions). COM is Windows-only; a D-Bus bridge could cover some uses. |
+| COM / ActiveX | ❌ missing | `ComObject`, `ComObjActive`, `ComObjGet`, `ComCall`, `ComObj*` (9 functions), the Gui ActiveX control and `SoundGetInterface`. COM is Windows-only; a D-Bus bridge could cover some uses. |
 | Wayland input | ❌ dropped for now | Hotkeys and Send need X11. A portal-based backend (GlobalShortcuts / RemoteDesktop) is the path forward. |
-| Gui | 🟡 65% | Missing control types: TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, ActiveX, Custom. `SetFont`, `BackColor`, `Opt` styles and control colours are accepted but ignored. |
-| Win32 controls | 🟡 61% | `ControlGetText/SetText/GetItems/Choose*`, `Edit*`, `ListViewGetContent`, `StatusBarGetText` and similar. Linux toolkits don't expose other apps' controls like Win32 does; AT-SPI accessibility could fill this in. |
-| DllCall | 🟡 partial | About 40 common Win32 APIs are emulated, and calls into Linux `.so` libraries work. Arbitrary Windows DLLs and calls by address don't. |
+| Gui | 🟢 92% | 21 of 23 control types. ActiveX and Custom host Win32 components. Smaller differences: an UpDown's buddy doesn't show thousands separators, MonthCal `Multi` returns a one-day range, StatusBar parts share one label, and widgets use the GTK theme's metrics, so default control sizes differ slightly from Windows. |
+| Win32 controls | 🟡 60% | `Control*`, `Edit*`, `ListViewGetContent`, `StatusBar*`, `WinGetText`, `WinGetControls` and `MenuSelect` are complete for the script's own Gui windows. X11 doesn't expose other programs' widgets, so for those they act on the whole window; AT-SPI accessibility could fill this in. |
+| DllCall | 🟡 partial | About 45 common Win32 APIs are emulated (including `EnumWindows`, `SendMessage`, `IsWindow`). Calls into any Linux `.so`, calls by address, `CallbackCreate` trampolines and native pointers work. Arbitrary Windows DLLs don't. |
+| Window messages | 🟡 partial | `OnMessage`, `SendMessage` and `PostMessage` work for the script's own windows and controls, and the common Win32 messages (`WM_CLOSE`, `WM_SYSCOMMAND`, `BM_CLICK`, `CB_SETCURSEL`, `WM_SETTEXT`...) are translated. Messages to other processes aren't delivered. |
 | Hotkeys (X11) | 🟢 90% | A hotkey on a bare modifier (`LWin::`) and hotstring end characters can't be suppressed under X11's grab model. `#InputLevel` and `SendLevel` are simplified. |
-| Window functions | 🟢 95% | `WinGetText`, `WinSetRegion`, `WinSetStyle`/`ExStyle` (except always-on-top) and transparent colours are partial. |
-| Files / Drives | 🟢 95% | Drive serial, label, file system and CD status are fixed values. |
-| Tray | 🟢 95% | Per-item menu icons (`Menu.SetIcon`) and menu colours aren't drawn. Verified live on XFCE; on Cinnamon through XApp's StatusIconMonitor, the mechanism Cinnamon's tray applet uses. |
+| Window functions | 🟢 97% | `WinSetRegion` and `WinSetTransColor` use the X Shape extension. A colour key is a snapshot of the window's current pixels, so content drawn later isn't keyed. `WinSetStyle`/`ExStyle` only map always-on-top. |
+| Files / Drives | 🟢 99% | `DriveGetLabel`, `DriveGetSerial`, `DriveGetType` and `DriveGetFileSystem` read the real mounts. `DriveSetLabel` runs the filesystem's label tool, which usually needs root. |
+| Tray | 🟢 95% | Per-item tray menu icons and menu colours aren't drawn (Gui and popup menus do draw them). Verified live on XFCE; on Cinnamon through XApp's StatusIconMonitor, the mechanism Cinnamon's tray applet uses. |
+| Diagnostics | 🟢 | `ListVars`, `ListHotkeys` and `KeyHistory` open AutoHotkey-style windows. `ListLines` toggles logging, but BHK doesn't record executed lines. |
 | AutoHotkey v2.1-alpha | ⚪ not targeted | Typed properties, structs and `#Module` are v2.1-alpha features. BHK targets v2.0. |
 | AutoHotkey v1 | ⚪ out of scope | v1 scripts get a clear message. |

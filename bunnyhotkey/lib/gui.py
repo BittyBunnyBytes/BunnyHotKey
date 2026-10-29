@@ -268,7 +268,7 @@ def file_dialog(kind, start="", title="", filt=""):
         if kind == "multi":
             return O.AhkArray(None, res.split("\n") if res else [])
         return res
-    throw("Error", "No file dialog available: install the tk package (sudo pacman -S tk) or zenity.")
+    throw("Error", "No file dialog available: install PyGObject with GTK 3 (python-gobject), zenity or kdialog.")
 
 
 # ---------------------------------------------------------------- Gui
@@ -279,7 +279,8 @@ def tray_menu(r):
 
 @export("MenuFromHandle")
 def MenuFromHandle(h):
-    return ""
+    from .guiobj import MENUS
+    return MENUS.get(rt().to_int(h), "")
 
 
 @export()
@@ -295,24 +296,60 @@ def GuiCtrlFromHwnd(hwnd):
     return CTRLS.get(rt().to_int(hwnd), "")
 
 
-@export()
-def IL_Create(*a):
-    return 1
+# Image lists and picture handles are kept script-side as file references; the GTK side loads the images when a
+# ListView/TreeView uses the list (SetImageList) or a Picture shows a handle ("HBITMAP:*123").
+ILS: dict[int, dict] = {}
+PICTURES: dict[int, str] = {}
+_handles = iter(range(0x10001, 1 << 30))
 
 
 @export()
-def IL_Add(*a):
-    return 1
+def IL_Create(initial=2, grow=5, large=0):
+    from ..values import to_bool
+    h = next(_handles)
+    ILS[h] = {"large": bool(to_bool(large)) if large not in (UNSET, "") else False, "items": []}
+    return h
+
+
+def picture_path(spec):
+    """File path for a Picture/IL_Add source: a file, or an HBITMAP:/HICON: handle from LoadPicture."""
+    m = re.fullmatch(r"\s*(?:hbitmap|hicon):\*?(\d+)\s*", spec, re.I)
+    if m:
+        return PICTURES.get(int(m.group(1)), "")
+    from .files import host_path
+    return host_path(spec) if spec else ""
 
 
 @export()
-def IL_Destroy(*a):
-    return 1
+def IL_Add(il, filename, icon_number=1, resize=0):
+    lst = ILS.get(rt().to_int(il))
+    if lst is None:
+        return 0
+    src = S(filename)
+    path = picture_path(src)
+    if not path or not os.path.exists(path):
+        # Windows icon resources (shell32.dll, ...) have no file here; a generic icon stands in for them
+        if not re.search(r"\.(dll|exe|cpl|icl|ocx)$", src, re.I):
+            return 0
+        path = src
+    lst["items"].append(path)
+    return len(lst["items"])
 
 
 @export()
-def LoadPicture(*a):
-    return 0
+def IL_Destroy(il):
+    return 1 if ILS.pop(rt().to_int(il), None) is not None else 0
+
+
+@export(byref=(2,))
+def LoadPicture(filename, options="", imagetype=UNSET):
+    path = picture_path(S(filename))
+    if not path or not os.path.exists(path):
+        return 0
+    h = next(_handles)
+    PICTURES[h] = path
+    setref(imagetype, 1 if path.lower().endswith((".ico", ".cur", ".ani")) else 0)
+    return h
 
 
 @export()

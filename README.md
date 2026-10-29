@@ -7,22 +7,22 @@
 </p>
 
 > **If Bunny Hot Key saves your AutoHotkey scripts on Linux, please [buy me a coffee on Ko-fi](https://ko-fi.com/bittybunnybytes).**
-> Every tip goes into closing the gaps below: more Gui controls, Wayland and COM bridges.
+> Every tip goes into closing the gaps below: Wayland, other apps' controls (AT-SPI) and COM bridges.
 
 ## How close is it to AutoHotkey?
 
-<p align="center"><img src="assets/parity.svg" alt="Parity with AutoHotkey v2 by area: language 99%, built-in functions 88%, Gui 65%, COM and Wayland 0%" width="860"></p>
+<p align="center"><img src="assets/parity.svg" alt="Parity with AutoHotkey v2 by area: language 99%, built-in functions 97%, Gui 92%, COM and Wayland 0%" width="860"></p>
 
 <!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
-**88% of its built-in function API** is reproduced (270 full, 63 partial, 11 missing).
+**97% of its built-in function API** is reproduced (332 full, 3 partial, 9 missing).
 
 **Missing or left to do:**
-- **COM/ActiveX:** Windows-only.
+- **COM/ActiveX:** Windows-only (`ComObject`, the Gui ActiveX control, `SoundGetInterface`).
 - **Wayland input:** dropped for now.
-- **Gui:** 8 control types to go (TreeView, Tab, UpDown, Hotkey, DateTime, MonthCal, ActiveX, Custom).
-- **Reading other apps' Win32 controls** (`ControlGetText` and similar).
-- **Some DllCalls.**
+- **Other apps' controls:** `Control*`, `WinGetText` and `MenuSelect` work fully on BHK's own Gui windows, but X11 doesn't expose other programs' widgets (AT-SPI could).
+- **Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
+- **Window messages between processes:** `SendMessage`/`PostMessage`/`OnMessage` reach the script's own windows and controls.
 
 The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
 <!-- parity:summary:end -->
@@ -87,6 +87,10 @@ bhk doctor                 # what BHK can use on this machine
   sections, `#Include <Lib>`, `#HotIf` and the other directives.
 - **Library:** all 362 entries in AutoHotkey's built-in function table exist.
   COM functions raise a clear error, since COM is Windows-only.
+  - `CallbackCreate` gives real native function pointers, so Linux libraries (e.g. libc's `qsort`) can call
+    back into the script; `DllCall` also calls by address and `NumGet`/`StrGet` read native pointers.
+  - `ObjPtr`/`ObjFromPtr`/`ObjAddRef`/`ObjRelease`, `StrPtr`, `OnMessage` with `SendMessage`/`PostMessage`,
+    `KeyHistory`, `ListVars`, `ListHotkeys` and `#InstallKeybdHook` all work.
 - **Input (X11):**
   - Hotkeys (modifiers, `~ * $ up`, `a & b`, remaps `a::b`, `#HotIf`) and hotstrings (all options).
   - Send/SendInput/SendText with full syntax, Click, MouseMove and friends.
@@ -95,10 +99,15 @@ bhk doctor                 # what BHK can use on this machine
 - **Windows:** WinTitle matching (title, `ahk_class`, `ahk_exe`, `ahk_pid`,
   `ahk_id`, `ahk_group`, all match modes), WinActivate, WinMove and the other
   Win* functions, PixelGetColor, PixelSearch and ImageSearch (PNG/BMP).
+  - `WinSetRegion` and `WinSetTransColor` shape windows with the X Shape extension.
+  - Multi-monitor `MonitorGet*` and `SysGet` come from XRandR.
+  - `Drive*` functions read real mount, label and serial data.
 - **GUI:**
   - MsgBox, InputBox, ToolTip, FileSelect and DirSelect.
-  - `Gui()` with Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, Slider, Progress, GroupBox, Picture, Link and StatusBar.
-  - AHK layout options and events, plus `Menu`.
+  - `Gui()` with 21 of AutoHotkey's 23 control types: Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, Slider, Progress, GroupBox, Picture, Link and StatusBar. (ActiveX and Custom host Win32 components and can't exist on Linux.)
+  - AHK layout options and events, `SetFont`, `BackColor`, control colours, `Gui.Opt` (AlwaysOnTop, -Caption, ToolWindow, Owner, MinSize...), ListView sorting/columns/checkboxes/icons, image lists, `ContextMenu` and `DropFiles`.
+  - `Menu` with submenus, radio items, icons and colours, plus `Gui.MenuBar`.
+  - `Control*`, `Edit*`, `ListViewGetContent`, `StatusBarGetText`, `WinGetText`, `WinGetControls` and `MenuSelect` work on the script's own Gui windows (by object, Hwnd, ClassNN such as `Edit1`, or text), like on Windows.
 - **Tray icon, like AutoHotkey on Windows:**
   - Every persistent script gets the pink tray icon, with the script name as its tooltip.
   - The standard menu: **Open** (bold default, double-click), Help, Window Spy, Reload Script, Edit Script, Suspend Hotkeys and Pause Script (both with check marks), Exit.
@@ -114,12 +123,13 @@ bhk doctor                 # what BHK can use on this machine
 - **Proof:**
   - `python3 tests/run.py` runs the regression suite. Its expected outputs were checked against the AutoHotkey source.
   - AutoHotkey's own UX scripts load, and Window Spy runs with live data.
-  - 243 of 246 scripts from seven popular v2 repositories load (thqby/ahk2_lib, Descolada's libraries, UIA-v2 and OCR, jNizM's scripts, cJson, JXON). The other 3 include files that aren't in their repos. See `docs/COMPATIBILITY.md`, and reproduce with `tests/validate_corpus.sh`.
+  - 327 of 337 scripts from seven popular v2 repositories and their submodules load (thqby/ahk2_lib, Descolada's libraries, UIA-v2 and OCR, jNizM's scripts, cJson, JXON). The other 10 are AutoHotkey v1 files, a code-generation template, or include files that aren't in their repos. See `docs/COMPATIBILITY.md`, and reproduce with `tests/validate_corpus.sh`.
 
 ## Not supported
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
 - **AutoHotkey v1 scripts:** BHK targets v2. A v1 `#Requires` gets a clear message.
 - **COM/ActiveX, and Windows-only APIs that aren't in the DllCall table.**
+- **Other programs' controls:** X11 doesn't expose another app's widgets the way Win32 does, so `ControlGetText` and similar act on the whole window there.
 
 ## Note for agents
 If you are an AI agent trying to use this project, these are the facts you need:

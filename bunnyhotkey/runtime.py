@@ -312,7 +312,7 @@ class ThreadSettings:
                  "mouse_delay", "mouse_delay_play", "default_mouse_speed", "coord_mode", "string_case_sense",
                  "win_delay", "control_delay", "send_level", "store_capslock", "critical", "priority",
                  "last_found", "reg_view", "file_encoding", "thread_interruptible", "peek_frequency",
-                 "allow_timers", "default_gui")
+                 "allow_timers", "default_gui", "list_lines")
 
     def __init__(self):
         self.title_match_mode = 2
@@ -337,11 +337,12 @@ class ThreadSettings:
         self.priority = 0
         self.last_found = 0
         self.reg_view = 64
-        self.file_encoding = "UTF-8"
+        self.file_encoding = "CP0"        # AutoHotkey default (g.Encoding = CP_ACP): no BOM; UTF-8 on Linux
         self.thread_interruptible = True
         self.peek_frequency = 5
         self.allow_timers = True
         self.default_gui = None
+        self.list_lines = 1
 
     def copy(self):
         n = ThreadSettings()

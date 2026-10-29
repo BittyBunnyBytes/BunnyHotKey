@@ -11,6 +11,7 @@ import codecs
 import fnmatch
 import glob
 import os
+import re
 import shutil
 import stat
 import sys
@@ -445,7 +446,19 @@ def FileSetTime(yyyymmdd="", filename=UNSET, which="M", mode=""):
 
 @export()
 def FileGetVersion(filename=UNSET):
-    return ""
+    """Version of a Windows executable or DLL, from its VS_FIXEDFILEINFO resource."""
+    import struct
+    p = host_path(S(filename)) if filename is not UNSET else rt().script_path
+    try:
+        with open(p, "rb") as fh:
+            data = fh.read(64 << 20)
+    except OSError as e:
+        throw("OSError", e.strerror or "The system cannot find the file specified.", S(filename))
+    i = data.find(b"\xbd\x04\xef\xfe")       # VS_FIXEDFILEINFO.dwSignature
+    if data[:2] != b"MZ" or i < 0 or len(data) < i + 16:
+        throw("OSError", "The specified resource type cannot be found in the image file.", S(filename))
+    ms, ls = struct.unpack_from("<II", data, i + 8)
+    return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
 
 
 @export()
@@ -627,13 +640,85 @@ def DriveGetCapacity(path):
     return st.f_blocks * st.f_frsize // (1024 * 1024)
 
 
+# ---------------------------------------------------------------- drive metadata from the host's mounts
+_FS_NAMES = {"vfat": "FAT32", "msdos": "FAT", "ntfs": "NTFS", "ntfs3": "NTFS", "fuseblk": "NTFS", "iso9660": "CDFS",
+             "udf": "UDF", "exfat": "exFAT"}
+_NET_FS = {"nfs", "nfs4", "cifs", "smb3", "smbfs", "sshfs", "fuse.sshfs", "9p", "afs", "davfs", "fuse.rclone"}
+
+
+def _unescape_mount(s):
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), s)
+
+
+def mount_of(path):
+    """(device, mount point, fs type) of the filesystem holding a host path."""
+    p = os.path.realpath(path)
+    while not os.path.exists(p) and p != "/":
+        p = os.path.dirname(p)
+    best = ("", "/", "")
+    try:
+        with open("/proc/self/mounts") as fh:
+            for line in fh:
+                f = line.split()
+                if len(f) < 3:
+                    continue
+                mnt = _unescape_mount(f[1])
+                if (p == mnt or p.startswith(mnt.rstrip("/") + "/")) and len(mnt) >= len(best[1]):
+                    best = (_unescape_mount(f[0]), mnt, f[2])
+    except OSError:
+        pass
+    return best
+
+
+def _disk_link(kind, device):
+    """Name in /dev/disk/by-<kind> that points at device (label, uuid)."""
+    base = f"/dev/disk/by-{kind}"
+    try:
+        real = os.path.realpath(device)
+        for name in os.listdir(base):
+            if os.path.realpath(os.path.join(base, name)) == real:
+                return _unescape_mount(name.replace("\\x", "\\x"))
+    except OSError:
+        pass
+    return ""
+
+
+def _drive_path(path):
+    p = S(path)
+    if re.fullmatch(r"[A-Za-z]:?\\?", p):
+        p = p[0] + ":\\"
+    hp = host_path(p)
+    if not os.path.exists(hp):
+        throw("OSError", "The system cannot find the path specified.", S(path))
+    return hp
+
+
 @export()
 def DriveGetList(type_=""):
-    return "CZ"
+    want = S(type_).lower()
+    letters = ["C"] + sorted(n[6:].upper() for n in os.listdir(prefix_dir())
+                             if n.startswith("drive_") and len(n) == 7 and n[6] not in "cz") + ["Z"]
+    if want:
+        letters = [x for x in letters if DriveGetType(x + ":").lower() == want]
+    return "".join(letters)
 
 
 @export()
 def DriveGetType(path):
+    dev, mnt, fs = mount_of(_drive_path(path))
+    if fs in _NET_FS or fs.startswith("fuse.") and "ssh" in fs:
+        return "Network"
+    if fs in ("tmpfs", "ramfs"):
+        return "RAMDisk"
+    if fs in ("iso9660", "udf") or os.path.basename(dev).startswith("sr"):
+        return "CDROM"
+    blk = re.sub(r"p?\d+$", "", os.path.basename(os.path.realpath(dev))) if dev.startswith("/dev/") else ""
+    try:
+        with open(f"/sys/block/{blk}/removable") as fh:
+            if fh.read().strip() == "1":
+                return "Removable"
+    except OSError:
+        pass
     return "Fixed"
 
 
@@ -644,17 +729,23 @@ def DriveGetStatus(path):
 
 @export()
 def DriveGetFileSystem(path):
-    return "ext4"
+    fs = mount_of(_drive_path(path))[2]
+    return _FS_NAMES.get(fs, fs)
 
 
 @export()
 def DriveGetLabel(path):
-    return ""
+    return _disk_link("label", mount_of(_drive_path(path))[0])
 
 
 @export()
 def DriveGetSerial(path):
-    return 0
+    """The volume serial number.  FAT's UUID is that number; NTFS's is its low 32 bits; for other filesystems the
+    first 32 bits of the UUID stand in for it."""
+    uuid = re.sub(r"[^0-9A-Fa-f]", "", _disk_link("uuid", mount_of(_drive_path(path))[0]))
+    if not uuid:
+        return 0
+    return int(uuid[-8:] if len(uuid) == 16 else uuid[:8], 16)
 
 
 @export()

@@ -243,6 +243,9 @@ class Program:
         except AhkSyntaxError as e:
             self.load_error(e)
             return 2
+        if getattr(rt, "want_hook", False):
+            from .lib.flow import _install_hook
+            _install_hook(1)          # #InstallKeybdHook / #InstallMouseHook
         if rt.hotmgr is not None and (rt.hotkeys.hotkeys or rt.hotstrings.items):
             from .backends import get_backend
             get_backend(rt).refresh()
@@ -373,6 +376,11 @@ class Program:
                               "menumaskkey", "allowsamelinecomments", "commentflag", "escapechar"):
                     if name == "persistent":
                         rt.persistent = True
+                    elif name in ("installkeybdhook", "installmousehook"):
+                        rt.want_hook = True
+                    elif name == "keyhistory":
+                        from .lib.flow import set_key_history
+                        set_key_history(int(str(node.args or "40").strip() or 40))
                     elif name == "maxhotkeysperinterval":
                         rt.max_hotkeys_per_interval = int(node.args or 70)
                 else:

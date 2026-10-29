@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import re
 import threading
+import collections
 import time
 from dataclasses import dataclass, field
 
 from . import keys as K
 
 MOD_CHARS = {"^": "ctrl", "+": "shift", "!": "alt", "#": "win"}
+# KeyHistory: the most recent physical events (#KeyHistory N sets the size; AutoHotkey's default is 40)
+KEY_HISTORY: collections.deque = collections.deque(maxlen=40)
 
 
 @dataclass
@@ -194,6 +197,13 @@ class HookEngine:
     # --- main entry ---
     def on_event(self, code: int, is_down: bool, kind: str = "key", repeat: bool = False) -> bool:
         """Process one physical event.  Returns True if it must be suppressed."""
+        suppressed = self._on_event(code, is_down, kind, repeat)
+        hist = globals()["KEY_HISTORY"]
+        if hist.maxlen:
+            hist.append((time.monotonic(), code, kind, is_down, bool(suppressed)))
+        return suppressed
+
+    def _on_event(self, code, is_down, kind, repeat):
         with self.lock:
             if kind == "wheel":
                 return self._match_and_fire(code, True, kind)

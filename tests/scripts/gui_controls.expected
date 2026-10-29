@@ -1,0 +1,50 @@
+back 008080
+tab 1 General 1 1 1
+updown 5 buddy 5
+updown 7 buddy 7
+hotkey ^!c
+hotkey +F5
+datetime 20240229000000 2024-02-29
+datetime 20251231000000 Wednesday, December 31, 2025
+monthcal 20240115
+tv 4 Bunny parent=1 child=1 next=1 checked=1 get=1
+tv full Animals Bunny Cat Plants 
+tv sel Cat 1
+tv after 3 Kitty
+lv sorted a.txt b.txt c.txt
+lv desc c.txt a.txt
+lv sel 2 2 3 checked=3
+lv cols 3 Kind text 100
+lv 4 z.txt 1
+multi 2 1,3 three
+ddl green
+ddl 1 green
+ctrls 12 first SysTabControl321
+classnn Edit1 Button1 SysListView321
+gettext 7
+settext carrot
+checked 0
+checked 1 1
+items 2 index 1
+choose 2 blue
+choice green find 2
+added 3
+deleted 2
+visible 0 0
+enabled 0 0 style 0x8000000
+enabled 1
+edit 3 [line two]
+lvcontent z.txt|c.txt|b.txt|a.txt
+lvcount 4 sel 2
+statusbar Ready / Part two
+wintext 1 exist 1
+target Target control not found.
+msg 0x5555 7 9 1
+send 42
+strptr hello
+cursel 1 blue
+menu &Open 1
+menu Deep
+submit General carrot 7 +F5 20251231000000 20240115 blue 0 2
+activex 1
+done

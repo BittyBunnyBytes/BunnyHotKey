@@ -46,7 +46,12 @@ def resolve(target, offset=0):
     for addr, b in _by_addr.items():
         if addr <= ptr < addr + max(len(b.data), 1):
             return b.data, ptr - addr
-    throw("ValueError", "Invalid address (Bunny Hot Key only supports addresses of Buffer objects).", hex(ptr))
+    if ptr >= 0x10000:
+        # a real address from native code (DllCall return values, callback arguments): read and write process
+        # memory directly, as AutoHotkey does
+        import ctypes
+        return memoryview((ctypes.c_char * (1 << 20)).from_address(ptr)).cast("B"), 0
+    throw("ValueError", "Invalid address.", hex(ptr))
 
 
 def setup(rt, cls):
@@ -171,7 +176,24 @@ def StrPut(string, target=UNSET, length=UNSET, encoding=UNSET):
 
 @export()
 def VarSetStrCapacity(ref, cap=UNSET):
-    return 0
+    """Strings are Python strings, which size themselves; capacity is reported in characters.  0 frees (empties)
+    the variable and -1 just reports, as in AutoHotkey."""
+    from ..objects import VarRef
+    if type(ref) is not VarRef:
+        throw("TypeError", "Expected a VarRef.", "VarSetStrCapacity")
+    cur = ref.cell.value
+    length = len(cur) if isinstance(cur, str) else 0
+    if cap is UNSET or cap == "":
+        return length
+    n = O.RT.to_int(cap)
+    if n == 0:
+        ref.cell.value = ""
+        return 0
+    if n < 0:
+        return length
+    if not isinstance(cur, str):
+        ref.cell.value = ""
+    return max(n, length)
 
 
 @export()

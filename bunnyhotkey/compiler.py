@@ -731,6 +731,8 @@ class Compiler:
 
     def e_Ref(self, e, scope):
         t = e.target
+        if isinstance(t, A.Maybe) and isinstance(t.expr, (A.Var, A.DynVar)):
+            t = t.expr      # `&var?`: the reference overrides the maybe-read (script.cpp SYM_REF -> VARREF_REF)
         if isinstance(t, A.Assign) and isinstance(t.target, (A.Var, A.DynVar)):
             assign = self.compile_expr(t, scope)
             ref = self.e_Ref(A.Ref(t.target, line=e.line, file=e.file), scope)

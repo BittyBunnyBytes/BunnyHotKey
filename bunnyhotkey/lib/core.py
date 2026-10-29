@@ -308,29 +308,73 @@ def ObjBindMethod(obj, name=UNSET, *args):
     return BoundFunc(lf, list(args))
 
 
+# Object addresses: ObjPtr gives each object a stable address; ObjFromPtr maps it back.  References counted with
+# ObjAddRef/ObjPtrAddRef keep the object alive until released, as in AutoHotkey (counts start at 1 for the
+# reference the script holds, since Python does the real reference counting).
+import weakref as _weakref
+_PTRS = _weakref.WeakValueDictionary()
+_STRONG: dict[int, list] = {}
+
+
+def _obj_arg(obj, fn):
+    if not isinstance(obj, AhkObject):
+        throw("TypeError", O.type_error_msg("Object", obj), fn)
+    _PTRS[id(obj)] = obj
+    return id(obj)
+
+
+def _from_ptr(ptr, fn):
+    p = O.RT.to_int(ptr)
+    obj = _PTRS.get(p) or (_STRONG.get(p) or [None])[0]
+    if obj is None:
+        throw("ValueError", "Invalid object pointer.", fn)
+    return p, obj
+
+
+def _addref(p, obj, n=1):
+    ent = _STRONG.setdefault(p, [obj, 0])
+    ent[1] += n
+    if ent[1] <= 0:
+        del _STRONG[p]
+        return 1
+    return ent[1] + 1
+
+
 @export()
 def ObjPtr(obj):
-    return id(obj)
+    return _obj_arg(obj, "ObjPtr")
 
 
 @export()
 def ObjPtrAddRef(obj):
-    return id(obj)
+    p = _obj_arg(obj, "ObjPtrAddRef")
+    _addref(p, obj)
+    return p
 
 
 @export()
 def ObjFromPtr(ptr):
-    throw("Error", "ObjFromPtr is not supported by Bunny Hot Key.")
+    p, obj = _from_ptr(ptr, "ObjFromPtr")
+    if p in _STRONG:
+        _addref(p, obj, -1)       # takes ownership of one counted reference
+    return obj
+
+
+@export()
+def ObjFromPtrAddRef(ptr):
+    return _from_ptr(ptr, "ObjFromPtrAddRef")[1]
 
 
 @export()
 def ObjAddRef(ptr):
-    return 1
+    p, obj = _from_ptr(ptr, "ObjAddRef")
+    return _addref(p, obj)
 
 
 @export()
 def ObjRelease(ptr):
-    return 0
+    p, obj = _from_ptr(ptr, "ObjRelease")
+    return _addref(p, obj, -1)
 
 
 @export()

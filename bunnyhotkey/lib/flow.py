@@ -218,8 +218,27 @@ def OnError(fn, add=1):
     return ""
 
 
+_MSG_HANDLERS: dict[int, list] = {}
+
+
+def message_handlers(msg):
+    return list(_MSG_HANDLERS.get(msg, []))
+
+
 @export()
 def OnMessage(msg, fn, max_threads=1):
+    """Register a handler for SendMessage/PostMessage to this script's windows (and Gui controls)."""
+    m = rt().to_int(msg)
+    n = rt().to_int(max_threads) if max_threads not in (UNSET, "") else 1
+    lst = _MSG_HANDLERS.setdefault(m, [])
+    if fn in lst:
+        lst.remove(fn)
+    if n > 0:
+        lst.append(fn)
+    elif n < 0:
+        lst.insert(0, fn)
+    if not lst:
+        del _MSG_HANDLERS[m]
     return ""
 
 
@@ -230,27 +249,111 @@ def OnClipboardChange(fn, add=1):
     return ""
 
 
+def _show_main(title, text):
+    """AutoHotkey's main window views (ListVars, ListHotkeys, KeyHistory, ListLines)."""
+    import os
+    r = rt()
+    name = os.path.basename(r.script_path)
+    try:
+        from .guiobj import _srv
+        _srv().call("info", title=f"{name} - {title} - Bunny Hot Key", text=text)
+    except Exception:
+        sys.stderr.write(text + "\n")
+    return ""
+
+
 @export()
 def ListLines(mode=UNSET):
-    return 0
+    """Line logging on/off; returns the previous setting.  (Executed lines are not recorded, so the window only
+    says so.)"""
+    r = rt()
+    old = int(getattr(r.thread.settings, "list_lines", 1))
+    if mode is UNSET:
+        return _show_main("Lines most recently executed",
+                          "Bunny Hot Key compiles scripts to Python closures and does not keep a log of executed "
+                          "lines.\nUse OutputDebug or FileAppend(..., \"*\") to trace execution.") and old
+    try:
+        r.thread.settings.list_lines = 1 if to_bool(mode) else 0
+    except AttributeError:
+        pass
+    return old
+
+
+def _var_line(name, v):
+    from ..values import type_name
+    from ..objects import AhkObject
+    if v is UNSET:
+        return f"{name}: unset"
+    if isinstance(v, AhkObject):
+        return f"{name}: {type_name(v)} object"
+    s = rt().to_str(v)
+    shown = s if len(s) <= 1000 else s[:1000] + "..."
+    if isinstance(v, str):
+        return f"{name}[{len(s)} of {len(s)}]: {shown}"
+    return f"{name}: {shown}"
 
 
 @export()
 def ListVars():
-    return ""
+    r = rt()
+    lines = ["Global Variables (alphabetical)", "-" * 50]
+    for key in sorted(r.globals, key=str.lower):
+        cell = r.globals[key]
+        if cell.value is UNSET and not getattr(cell, "name", ""):
+            continue
+        lines.append(_var_line(cell.name or key, cell.value))
+    return _show_main("Variables and their contents", "\n".join(lines))
 
 
 @export()
 def ListHotkeys():
     r = rt()
+    lines = ["Type\tOff?\tLevel\tRunning\tName", "-" * 60]
     if r.hotkeys:
-        print("\n".join(hk.name for hk in r.hotkeys.hotkeys))
-    return ""
+        for hk in r.hotkeys.hotkeys:
+            off = "" if any(v.enabled for v in hk.variants) else "OFF"
+            lines.append(f"k-hook\t{off}\t\t\t{hk.name}")
+    if r.hotstrings is not None:
+        for h in r.hotstrings.items:
+            lines.append(f"hotstring\t\t\t\t:{h.options if hasattr(h, 'options') else ''}:{h.trigger}")
+    return _show_main("Hotkeys and their methods", "\n".join(lines))
 
 
 @export()
 def KeyHistory(n=UNSET):
-    return ""
+    from .. import hotkeys as H
+    from .. import keys as K
+    if n is not UNSET:
+        set_key_history(rt().to_int(n))
+        return ""
+    KEY_HISTORY = H.KEY_HISTORY
+    lines = ["Window: " + _active_title(), "Keys are shown oldest first.  Type: h = suppressed by a hotkey, "
+             "s = sent by the script.", "", "SC\tType\tUp/Dn\tElapsed\tKey", "-" * 60]
+    prev = None
+    for t, code, kind, down, sup in list(KEY_HISTORY):
+        k = K.from_code(code) if kind == "key" else None
+        name = K.key_name(k) if k is not None else (kind if kind != "key" else f"sc{code:03X}")
+        sc = f"{k.sc:03X}" if k is not None and k.sc else "000"
+        lines.append(f"{sc}\t{'h' if sup else ''}\t{'d' if down else 'u'}\t{0 if prev is None else t - prev:.2f}"
+                     f"\t{name}")
+        prev = t
+    return _show_main("Key history", "\n".join(lines))
+
+
+def set_key_history(n):
+    """KeyHistory N / #KeyHistory N: keep the last N events (0 disables logging, max 500)."""
+    import collections
+    from .. import hotkeys as H
+    H.KEY_HISTORY = collections.deque(maxlen=max(0, min(n, 500)))
+
+
+def _active_title():
+    try:
+        from .window import _dpy, active_window, title_of
+        d = _dpy()
+        return title_of(d, active_window(d)) or ""
+    except Exception:
+        return ""
 
 
 @export()
@@ -260,14 +363,29 @@ def OutputDebug(text):
     return ""
 
 
+def _install_hook(install):
+    """Start watching physical input (XInput2 raw events on X11) even if the script has no hotkeys, so KeyHistory,
+    GetKeyState(, "P") and A_TimeIdlePhysical see real input.  Like AutoHotkey's hooks, this doesn't by itself keep
+    the script running."""
+    if install is not UNSET and not to_bool(install):
+        return ""
+    r = rt()
+    if getattr(r, "hotmgr", None) is None:
+        from ..hotmgr import HotManager
+        r.hotmgr = HotManager(r)
+    from .input_ import backend
+    backend()
+    return ""
+
+
 @export()
 def InstallKeybdHook(install=1, force=0):
-    return ""
+    return _install_hook(install)
 
 
 @export()
 def InstallMouseHook(install=1, force=0):
-    return ""
+    return _install_hook(install)
 
 
 # ---------------------------------------------------------------- per-thread settings

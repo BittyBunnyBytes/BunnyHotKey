@@ -183,10 +183,11 @@ EMU = {
     "isuseranadmin": lambda p: int(os.geteuid() == 0),
     "lockworkstation": _lock,
     "setsuspendstate": _suspend,
-    "sendmessage": lambda p: 0, "sendmessagew": lambda p: 0, "postmessage": lambda p: 1, "postmessagew": lambda p: 1,
+    "sendmessage": lambda p: _send_message(p, True), "postmessage": lambda p: _send_message(p, False),
+    "enumwindows": lambda p: _enum_windows(p),
     "getdpiforwindow": lambda p: 96, "getdpiforsystem": lambda p: 96,
     "setprocessdpiaware": lambda p: 1, "setthreaddpiawarenesscontext": lambda p: 0,
-    "iswindowvisible": lambda p: 1, "iswindow": lambda p: 1,
+    "iswindowvisible": lambda p: _is_window(p, True), "iswindow": lambda p: _is_window(p, False),
     "getwindowtextw": _get_window_text, "getwindowtext": _get_window_text,
     "systemparametersinfo": lambda p: 0, "systemparametersinfow": lambda p: 0,
     "timebeginperiod": lambda p: 0, "timeendperiod": lambda p: 0,
@@ -211,6 +212,11 @@ def _linux_call(libname, fname, pairs, ret):
         fn = getattr(lib, fname)
     except (OSError, AttributeError):
         throw("Error", "Call to nonexistent function.", f"{libname}\\{fname}")
+    return _c_call(fn, pairs, ret)
+
+
+def _c_call(fn, pairs, ret):
+    """Call a native function with AutoHotkey-typed arguments."""
     cargs = []
     outs = []
     for t, v in pairs:
@@ -253,8 +259,10 @@ def _linux_call(libname, fname, pairs, ret):
 @export()
 def DllCall(func, *args):
     pairs, ret = _split_args(args)
-    if isinstance(func, AhkObject) or type(func) is int:
-        throw("Error", "DllCall by address is not supported by Bunny Hot Key.", "DllCall")
+    if isinstance(func, AhkObject):
+        func = I(O.RT.get_prop(func, "Ptr"))
+    if type(func) is int:
+        return call_address(func, pairs, ret)
     name = S(func).replace("/", "\\")
     lib, _, fn = name.rpartition("\\")
     if lib and (".so" in lib or lib.startswith("lib")) and not lib.lower().endswith(".dll"):
@@ -268,14 +276,108 @@ def DllCall(func, *args):
     throw("Error", f"DllCall: {fn} is a Windows API that Bunny Hot Key does not emulate yet.", name)
 
 
+# ---------------------------------------------------------------- callbacks and calls by address
+_CALLBACKS: dict[int, tuple] = {}
+
+
+def _arg_value(v):
+    if isinstance(v, AhkObject):
+        try:
+            return I(O.RT.get_prop(v, "Ptr"))
+        except Exception:
+            return id(v)
+    if isinstance(v, str) and not v.strip().lstrip("-").isdigit():
+        from .strings import StrPtr
+        return StrPtr(v)
+    return O.RT.to_num(v) if v not in (UNSET, "") else 0
+
+
+def call_address(addr, pairs, ret="Int"):
+    """DllCall(address): a CallbackCreate address runs the script function directly; any other address is called
+    as a native (cdecl) function pointer, as AutoHotkey does."""
+    cb = _CALLBACKS.get(addr)
+    if cb is not None:
+        r = O.RT.call(cb[1], [_arg_value(v) for _, v in pairs])
+        return r if r not in (UNSET,) else ""
+    if addr == 0:
+        throw("Error", "Invalid function address.", "DllCall")
+    return _c_call(ctypes.CFUNCTYPE(ctypes.c_int64)(addr), pairs, ret)
+
+
 @export()
 def CallbackCreate(fn, options="", count=UNSET):
-    return id(fn)
+    """A native function pointer that calls the script function (usable by Linux libraries, e.g. qsort, and by the
+    emulated Win32 APIs such as EnumWindows)."""
+    opts = S(options).lower().split() if options not in (UNSET, "") else []
+    if count in (UNSET, ""):
+        try:
+            n = I(O.RT.get_prop(fn, "MinParams"))
+        except Exception:
+            n = 0
+    else:
+        n = I(count)
+    by_addr = "&" in opts or any(o.startswith("&") for o in opts)
+    from .buffer import BufferObj
+
+    def tramp(*args):
+        try:
+            if by_addr:
+                b = BufferObj(8 * max(n, 1))
+                b.data[:] = ctypes.string_at(args[0], 8 * max(n, 1))
+                call_args = [b.addr]
+            else:
+                call_args = list(args)
+            r = O.RT.call(fn, call_args)
+            return int(O.RT.to_num(r)) if r not in ("", UNSET, None) else 0
+        except Exception:
+            return 0
+    proto = ctypes.CFUNCTYPE(ctypes.c_ssize_t, *([ctypes.c_ssize_t] * (1 if by_addr else n)))
+    cf = proto(tramp)
+    addr = ctypes.cast(cf, ctypes.c_void_p).value
+    _CALLBACKS[addr] = (cf, fn, by_addr, n)
+    return addr
 
 
 @export()
 def CallbackFree(addr):
+    if _CALLBACKS.pop(I(addr), None) is None:
+        throw("ValueError", "Parameter #1 of CallbackFree is invalid.", addr)
     return ""
+
+
+def _enum_windows(pairs):
+    from .window import _dpy, client_list
+    cb = I(pairs[0][1])
+    lp = _arg_value(pairs[1][1]) if len(pairs) > 1 else 0
+    d = _dpy()
+    for w in (client_list(d, True) if d else []):
+        if not I(call_address(cb, [("Ptr", w), ("Ptr", lp)], "Int") or 0):
+            break
+    return 1
+
+
+def _is_window(pairs, visible):
+    from .guiobj import CTRLS
+    from .window import _dpy, client_list, is_visible
+    h = I(pairs[0][1]) if pairs else 0
+    if h in CTRLS:
+        return int(CTRLS[h].visible) if visible else 1
+    d = _dpy()
+    if d is None or h not in client_list(d, True):
+        return 0
+    return int(is_visible(d, h)) if visible else 1
+
+
+def _send_message(pairs, sync):
+    from .window import SendMessage, PostMessage
+    from .guiobj import CTRLS
+    h, msg = I(pairs[0][1]), I(pairs[1][1])
+    wp = _arg_value(pairs[2][1]) if len(pairs) > 2 else 0
+    lp = _arg_value(pairs[3][1]) if len(pairs) > 3 else 0
+    if h in CTRLS:
+        return (SendMessage if sync else PostMessage)(msg, wp, lp, h)
+    return (SendMessage if sync else PostMessage)(msg, wp, lp, UNSET, f"ahk_id {h}") if sync else \
+        (PostMessage(msg, wp, lp, UNSET, f"ahk_id {h}"), 1)[1]
 
 
 @export()

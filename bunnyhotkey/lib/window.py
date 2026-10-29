@@ -232,6 +232,14 @@ def window_matches(d, w, c: Criteria, mode=None) -> bool:
         crits = GROUPS.get(c.group.lower(), [])
         if not any(window_matches(d, w, g) for g in crits):
             return False
+    if c.text or c.ex_text:
+        # WinText: only this script's own Gui windows expose control text on X11
+        texts = _gui_texts(w)
+        if texts is not None:
+            if c.text and not any(_str_match(c.text, x, mode) for x in texts):
+                return False
+            if c.ex_text and any(_str_match(c.ex_text, x, mode) for x in texts):
+                return False
     return True
 
 
@@ -516,22 +524,53 @@ def WinGetExStyle(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     return 0x8 if d.atom("_NET_WM_STATE_ABOVE") in d.get_longs(w, "_NET_WM_STATE") else 0
 
 
+def _gui_texts(win, hidden=None):
+    """Control texts of one of this script's Gui windows, in creation order (as WinGetText lists them)."""
+    from .guiobj import ctrl_get, gui_for_window
+    g = gui_for_window(win)
+    if g is None:
+        return None
+    if hidden is None:
+        hidden = rt().thread.settings.detect_hidden_text
+    out = []
+    for c in g.ctrls:
+        if not hidden and not c.visible:
+            continue
+        if c.ctype in ("ListView", "TreeView", "Picture", "Progress", "Slider", "UpDown", "MonthCal"):
+            continue
+        try:
+            v = ctrl_get(c, "Text")
+        except Exception:
+            continue
+        v = v if isinstance(v, str) else "\r\n".join(S(i) for i in v.items)
+        if c.ctype in ("Button", "CheckBox", "Radio"):
+            v = v.replace("&&", "\0").replace("&", "").replace("\0", "&")
+        if v != "":
+            out.append(v)
+    return out
+
+
 @export()
 def WinGetText(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _win_arg(t, txt, xt, xx)
-    return ""
+    texts = _gui_texts(_win_arg(t, txt, xt, xx))
+    return "".join(x + "\r\n" for x in texts) if texts else ""
+
+
+def _gui_ctrls(t, txt, xt, xx):
+    from .guiobj import gui_for_window
+    g = gui_for_window(_win_arg(t, txt, xt, xx))
+    return g.ctrls if g is not None else []
 
 
 @export()
 def WinGetControls(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _win_arg(t, txt, xt, xx)
-    return AhkArray(None, [])
+    from .guiobj import classnn
+    return AhkArray(None, [classnn(c) for c in _gui_ctrls(t, txt, xt, xx)])
 
 
 @export()
 def WinGetControlsHwnd(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _win_arg(t, txt, xt, xx)
-    return AhkArray(None, [])
+    return AhkArray(None, [c.cid for c in _gui_ctrls(t, txt, xt, xx)])
 
 
 @export()
@@ -544,7 +583,7 @@ def WinGetTransparent(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 
 @export()
 def WinGetTransColor(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    return ""
+    return _TRANS_COLOR.get(_win_arg(t, txt, xt, xx), "")
 
 
 @export()
@@ -679,9 +718,157 @@ def WinSetTransparent(n, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     return ""
 
 
+_TRANS_COLOR: dict[int, str] = {}
+
+
 @export()
 def WinSetTransColor(color, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    """Colour-keyed transparency.  X11 has no colour key, so the window is shaped (X Shape extension) to cut out the
+    pixels that currently have that colour; an optional second number also sets the window's opacity."""
+    d = _dpy()
+    win = _win_arg(t, txt, xt, xx)
+    s = S(color).strip()
+    if s.lower() == "off" or s == "":
+        _TRANS_COLOR.pop(win, None)
+        _shape_reset(d, win)
+        WinSetTransparent("Off", f"ahk_id {win}")
+        return ""
+    parts = s.split()
+    from .guiobj import parse_color
+    col = parse_color(parts[0])
+    if not col:
+        throw("ValueError", "Parameter #1 of WinSetTransColor is invalid.", s)
+    rgb = int(col[1:], 16)
+    _TRANS_COLOR[win] = "0x%06X" % rgb
+    gx, gy, gw, gh = geometry(d, win, client=True)
+    if gw and gh:
+        w, h, rows = grab(gx, gy, gw, gh)
+        tr, tg, tb = (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255
+        rects = []
+        for y in range(h):
+            row, x = rows[y], 0
+            while x < w:
+                while x < w and (row[x * 4 + 2], row[x * 4 + 1], row[x * 4]) == (tr, tg, tb):
+                    x += 1
+                start = x
+                while x < w and (row[x * 4 + 2], row[x * 4 + 1], row[x * 4]) != (tr, tg, tb):
+                    x += 1
+                if x > start:
+                    rects.append((start, y, x - start, 1))
+        _shape_set(d, win, rects)
+    if len(parts) > 1:
+        WinSetTransparent(parts[1], f"ahk_id {win}")
     return ""
+
+
+def _xext():
+    from .. import xlib
+    ext = xlib._lib("Xext")
+    if ext is None:
+        throw("Error", "The X Shape extension (libXext) is not available.")
+    return ext
+
+
+def _shape_set(d, w, rects):
+    """Set the window's bounding shape to the union of (x, y, w, h) rectangles."""
+    import ctypes
+
+    class XRectangle(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort),
+                    ("height", ctypes.c_ushort)]
+    ext = _xext()
+    arr = (XRectangle * max(len(rects), 1))(*[XRectangle(int(x), int(y), int(rw), int(rh)) for x, y, rw, rh in rects])
+    ext.XShapeCombineRectangles.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                            ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    ext.XShapeCombineRectangles(d.dpy, w, 0, 0, 0, arr, len(rects), 0, 0)      # ShapeBounding, ShapeSet, Unsorted
+    d.flush()
+
+
+def _shape_reset(d, w):
+    import ctypes
+    ext = _xext()
+    ext.XShapeCombineMask.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                      ctypes.c_ulong, ctypes.c_int]
+    ext.XShapeCombineMask(d.dpy, w, 0, 0, 0, 0, 0)
+    d.flush()
+
+
+def _region_rects(spec, width, height):
+    """WinSetRegion options -> rectangles (one per scanline span).  "X-Y Wn Hn [Rw-h | E]" or a polygon of up to
+    2000 "X-Y" points, with "Wind" for the winding fill rule (script2.cpp WinSetRegion)."""
+    import math
+    toks = spec.split()
+    pts, w = [], None
+    h = rw = rh = None
+    ellipse = wind = False
+    for t in toks:
+        tl = t.lower()
+        if tl == "e":
+            ellipse = True
+        elif tl == "wind":
+            wind = True
+        elif tl.startswith("w") and tl[1:].isdigit():
+            w = int(tl[1:])
+        elif tl.startswith("h") and tl[1:].isdigit():
+            h = int(tl[1:])
+        elif tl.startswith("r"):
+            a, _, b = tl[1:].partition("-")
+            rw, rh = int(a or 30), int(b or a or 30)
+        else:
+            a, _, b = tl.partition("-")
+            try:
+                pts.append((int(a), int(b)))
+            except ValueError:
+                throw("ValueError", "Parameter #1 of WinSetRegion is invalid.", t)
+    rects = []
+    if w is not None or h is not None:
+        x0, y0 = pts[0] if pts else (0, 0)
+        w, h = w or width, h or height
+        for y in range(h):
+            if ellipse:
+                cy = (y + 0.5 - h / 2) / (h / 2)
+                if abs(cy) > 1:
+                    continue
+                half = (w / 2) * math.sqrt(1 - cy * cy)
+                left, right = round(w / 2 - half), round(w / 2 + half)
+            elif rw:
+                rx, ry = rw / 2, rh / 2
+                left, right = 0, w
+                dy = ry - y - 0.5 if y < ry else (y + 0.5 - (h - ry) if y >= h - ry else None)
+                if dy is not None and dy > 0:
+                    inset = rx - rx * math.sqrt(max(0.0, 1 - (dy / ry) ** 2))
+                    left, right = round(inset), round(w - inset)
+            else:
+                left, right = 0, w
+            if right > left:
+                rects.append((x0 + left, y0 + y, right - left, 1))
+        return rects
+    if len(pts) < 3:
+        throw("ValueError", "Parameter #1 of WinSetRegion is invalid.", spec)
+    ys = [p[1] for p in pts]
+    edges = list(zip(pts, pts[1:] + pts[:1]))
+    for y in range(min(ys), max(ys)):
+        yc = y + 0.5
+        xs = []
+        for (x1, y1), (x2, y2) in edges:
+            if (y1 <= yc < y2) or (y2 <= yc < y1):
+                xs.append((x1 + (yc - y1) * (x2 - x1) / (y2 - y1), 1 if y2 > y1 else -1))
+        xs.sort()
+        if wind:
+            n, start = 0, None
+            for x, dirn in xs:
+                was = n != 0
+                n += dirn
+                if not was and n != 0:
+                    start = x
+                elif was and n == 0:
+                    rects.append((round(start), y, round(x) - round(start), 1))
+        else:
+            for i in range(0, len(xs) - 1, 2):
+                a, b = round(xs[i][0]), round(xs[i + 1][0])
+                if b > a:
+                    rects.append((a, y, b - a, 1))
+    return rects
 
 
 @export()
@@ -705,12 +892,27 @@ def WinSetExStyle(v, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 
 
 @export()
-def WinSetRegion(*a):
+def WinSetRegion(options="", t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    d = _dpy()
+    win = _win_arg(t, txt, xt, xx)
+    spec = S(options).strip()
+    if spec == "":
+        _shape_reset(d, win)
+        return ""
+    # AutoHotkey's coordinates are relative to the window's outer top-left; the shape applies to the client window
+    l, r_, tp, b = frame_extents(d, win)
+    gx, gy, gw, gh = geometry(d, win, client=True)
+    rects = [(x - l, y - tp, w, h) for x, y, w, h in _region_rects(spec, gw + l + r_, gh + tp + b)]
+    _shape_set(d, win, rects)
     return ""
 
 
 @export()
-def WinRedraw(*a):
+def WinRedraw(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    d = _dpy()
+    win = _win_arg(t, txt, xt, xx)
+    d.x.XClearArea(d.dpy, win, 0, 0, 0, 0, 1)     # exposures=True: the app repaints the whole window
+    d.flush()
     return ""
 
 
@@ -766,6 +968,20 @@ def GroupActivate(name, mode=""):
 
 @export()
 def GroupDeactivate(name, mode=""):
+    """Activate the most recently used window that isn't in the group."""
+    d = _dpy()
+    c = Criteria()
+    c.group = S(name)
+    if c.group.lower() not in GROUPS:
+        throw("TargetError", "Nonexistent group.", S(name))
+    stack = [w for w in reversed(d.get_longs(d.root, "_NET_CLIENT_LIST_STACKING")) if is_visible(d, w)]
+    skip_types = {d.atom(a) for a in ("_NET_WM_WINDOW_TYPE_DESKTOP", "_NET_WM_WINDOW_TYPE_DOCK")}
+    for w in stack:
+        if skip_types & set(d.get_longs(w, "_NET_WM_WINDOW_TYPE")):
+            continue
+        if not window_matches(d, w, c):
+            activate(d, w)
+            return ""
     return ""
 
 
@@ -779,19 +995,60 @@ def GroupClose(name, mode=""):
     return ""
 
 
-# ---------------------------------------------------------------- controls (limited on X11)
-def _target_for_control(control, t, txt, xt, xx):
+# ---------------------------------------------------------------- controls
+# Control* functions act fully on this script's own Gui windows (resolved by Gui.Control object, Hwnd, ClassNN such as
+# "Edit1" or control text, as in AutoHotkey).  Other applications' widgets aren't exposed by X11, so for those the
+# functions act on the target window itself where that makes sense.
+def _ctl(control, t, txt, xt, xx):
+    """-> (Gui control or None, X window)."""
+    from .guiobj import CtrlObj, CTRLS, find_ctrl, gui_for_window
+    if isinstance(control, CtrlObj):
+        if control.gui.destroyed:
+            throw("TargetError", "Target control not found.")
+        return control, control.gui.xid
     if isinstance(control, AhkObject):
-        return rt().to_int(rt().get_prop(control, "Hwnd"))
+        control = rt().to_int(rt().get_prop(control, "Hwnd"))
     if type(control) is int:
-        return control
-    return _win_arg(t, txt, xt, xx)
+        c = CTRLS.get(control)
+        return (c, c.gui.xid) if c is not None else (None, control)
+    win = _win_arg(t, txt, xt, xx)
+    if control is UNSET or S(control) == "":
+        return None, win
+    c = find_ctrl(control, win)
+    if c is None and gui_for_window(win) is not None:
+        throw("TargetError", "Target control not found.", S(control))
+    return c, win
+
+
+def _need(c, *types):
+    if c is None or (types and c.ctype not in types):
+        throw("Error", "The control type is not supported by this function." if c is not None else
+              "Target control not found.")
+    return c
+
+
+def _target_for_control(control, t, txt, xt, xx):
+    c, win = _ctl(control, t, txt, xt, xx)
+    return c.cid if c is not None else win
+
+
+def _items(c):
+    from .guiobj import _srv
+    return _srv().call("query", ctrl=c.cid, what="items")
+
+
+def _gset(c, prop, value, notify=True):
+    from .guiobj import _srv
+    _srv().call("set", ctrl=c.cid, prop=prop, value=value, notify=notify)
 
 
 @export()
 def ControlSend(keys, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     from .input_ import send_to_window
-    win = _target_for_control(control, t, txt, xt, xx)
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import _srv
+        _srv().call("focus", ctrl=c.cid)
     send_to_window(win, S(keys), raw=False)
     return ""
 
@@ -799,7 +1056,10 @@ def ControlSend(keys, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 @export()
 def ControlSendText(keys, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     from .input_ import send_to_window
-    win = _target_for_control(control, t, txt, xt, xx)
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import _srv
+        _srv().call("focus", ctrl=c.cid)
     send_to_window(win, S(keys), raw=True)
     return ""
 
@@ -807,8 +1067,18 @@ def ControlSendText(keys, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET)
 @export()
 def ControlClick(target=UNSET, t=UNSET, txt=UNSET, button="Left", count=1, options="", xt=UNSET, xx=UNSET):
     from .input_ import click_window
-    win = _win_arg(t, txt, xt, xx)
-    m = re.match(r"\s*x(-?\d+)\s+y(-?\d+)", S(target)) if target is not UNSET and isinstance(target, str) else None
+    m = re.match(r"\s*x(-?\d+)\s+y(-?\d+)", target) if isinstance(target, str) else None
+    if m is None and target is not UNSET and S(target) != "":
+        c, win = _ctl(target, t, txt, xt, xx)
+        if c is not None:
+            from .guiobj import _srv
+            if S(button).lower() in ("", "left", "l"):
+                for _ in range(max(rt().to_int(count) if count != "" else 1, 1)):
+                    _srv().call("click", ctrl=c.cid)
+            _srv().call("focus", ctrl=c.cid)
+            return ""
+    else:
+        win = _win_arg(t, txt, xt, xx)
     pos = (int(m.group(1)), int(m.group(2))) if m else None
     click_window(win, S(button), rt().to_int(count) if count != "" else 1, pos)
     return ""
@@ -816,7 +1086,11 @@ def ControlClick(target=UNSET, t=UNSET, txt=UNSET, button="Left", count=1, optio
 
 @export()
 def ControlFocus(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    activate(_dpy(), _target_for_control(control, t, txt, xt, xx))
+    c, win = _ctl(control, t, txt, xt, xx)
+    activate(_dpy(), win)
+    if c is not None:
+        from .guiobj import _srv
+        _srv().call("focus", ctrl=c.cid)
     return ""
 
 
@@ -827,202 +1101,532 @@ def ControlGetHwnd(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 
 @export()
 def ControlGetFocus(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    return _win_arg(t, txt, xt, xx)
+    from .guiobj import _srv, gui_for_window
+    win = _win_arg(t, txt, xt, xx)
+    g = gui_for_window(win)
+    if g is not None:
+        return _srv().call("focused", win=g.wid) or 0
+    return win
 
 
 @export()
 def ControlGetText(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    return title_of(_dpy(), _target_for_control(control, t, txt, xt, xx)) or ""
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import ctrl_get
+        v = ctrl_get(c, "Text")
+        return v if isinstance(v, str) else "\n".join(S(i) for i in v.items)
+    return title_of(_dpy(), win) or ""
 
 
 @export()
 def ControlSetText(newtext, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        if c.ctype in ("DDL", "ListBox", "Tab"):
+            return ""        # WM_SETTEXT doesn't change a list's selection in Win32 either
+        _gset(c, "Text", S(newtext))
     return ""
 
 
 @export(byref=(0, 1, 2, 3))
 def ControlGetPos(x=UNSET, y=UNSET, w=UNSET, h=UNSET, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    win = _target_for_control(control, t, txt, xt, xx)
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        setref(x, c.x); setref(y, c.y); setref(w, c.w); setref(h, c.h)
+        return ""
     gx, gy, gw, gh = geometry(_dpy(), win, client=True)
     setref(x, 0); setref(y, 0); setref(w, gw); setref(h, gh)
     return ""
 
 
 @export()
-def ControlGetVisible(*a):
-    return 1
-
-
-@export()
-def ControlGetEnabled(*a):
-    return 1
-
-
-@export()
-def ControlGetClassNN(control, *a):
+def ControlMove(x=UNSET, y=UNSET, w=UNSET, h=UNSET, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import _ctrl_move
+        _ctrl_move(c, x, y, w, h)
     return ""
 
 
 @export()
-def ControlMove(*a):
+def ControlGetVisible(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    return int(c.visible) if c is not None else int(is_visible(_dpy(), win))
+
+
+@export()
+def ControlGetEnabled(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    return int(c.enabled) if c is not None else 1
+
+
+@export()
+def ControlGetClassNN(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import classnn
+        return classnn(c)
+    return class_of(_dpy(), win)[1] + "1"
+
+
+@export()
+def ControlShow(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import ctrl_set_visible
+        ctrl_set_visible(c, 1)
     return ""
 
 
 @export()
-def ControlShow(*a):
+def ControlHide(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import ctrl_set_visible
+        ctrl_set_visible(c, 0)
     return ""
 
 
 @export()
-def ControlHide(*a):
+def ControlSetEnabled(value, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        from .guiobj import ctrl_set_enabled
+        v = rt().to_int(value)
+        ctrl_set_enabled(c, (not c.enabled) if v == -1 else bool(v))
     return ""
 
 
 @export()
-def ControlSetEnabled(*a):
+def ControlChooseIndex(n, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    i = rt().to_int(n)
+    if not 0 <= i <= len(_items(c)) or (i == 0 and c.ctype == "Tab"):
+        throw("ValueError", "Parameter #1 of ControlChooseIndex is invalid.", n)
+    _gset(c, "Value", i)
     return ""
 
 
 @export()
-def ControlChooseIndex(*a):
+def ControlChooseString(s, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    sl = S(s).lower()
+    idx = next((i for i, it in enumerate(_items(c), 1) if it.lower().startswith(sl)), 0)
+    if not idx:
+        throw("TargetError", "Target item not found.", S(s))
+    _gset(c, "Value", idx)
+    return idx
+
+
+@export()
+def ControlGetChecked(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0])
+    if c.ctype not in ("CheckBox", "Radio"):
+        return 0
+    from .guiobj import ctrl_get
+    return 1 if ctrl_get(c, "Value") == 1 else 0
+
+
+@export()
+def ControlSetChecked(value, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "CheckBox", "Radio")
+    from .guiobj import ctrl_get
+    v = rt().to_int(value)
+    cur = ctrl_get(c, "Value") == 1
+    want = (not cur) if v == -1 else bool(v)
+    if want != cur:
+        _gset(c, "Value", int(want))
     return ""
 
 
 @export()
-def ControlChooseString(*a):
-    return 0
+def ControlGetItems(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "ListView", "Tab")
+    return AhkArray(None, list(_items(c)))
 
 
 @export()
-def ControlGetChecked(*a):
-    return 0
+def ControlGetChoice(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    from .guiobj import ctrl_get
+    if c.ctype in ("DDL", "ComboBox") and ctrl_get(c, "Value") == 0:
+        throw("Error", "Nothing is selected.")
+    v = ctrl_get(c, "Text")
+    return v if isinstance(v, str) else (S(v.items[0]) if v.items else "")
 
 
 @export()
-def ControlSetChecked(*a):
+def ControlGetIndex(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    from .guiobj import ctrl_get
+    v = ctrl_get(c, "Value")
+    return v if isinstance(v, int) else (v.items[0] if v.items else 0)
+
+
+WS_VISIBLE, WS_DISABLED, WS_CHILD, WS_TABSTOP = 0x10000000, 0x08000000, 0x40000000, 0x00010000
+
+
+def _style_of(c):
+    s = WS_CHILD | (WS_VISIBLE if c.visible else 0) | (WS_DISABLED if not c.enabled else 0)
+    if c.ctype not in ("Text", "GroupBox", "Picture", "Progress", "StatusBar"):
+        s |= WS_TABSTOP
+    if c.ctype == "Edit":
+        s |= 0x80 | (0x800 if c.readonly else 0) | (0x20 if c.password else 0)        # ES_AUTOHSCROLL etc.
+    elif c.ctype == "CheckBox":
+        s |= 0x3
+    elif c.ctype == "Radio":
+        s |= 0x9
+    elif c.ctype == "GroupBox":
+        s |= 0x7
+    elif c.ctype == "DDL":
+        s |= 0x3 | 0x200000
+    elif c.ctype == "ComboBox":
+        s |= 0x2 | 0x200000
+    elif c.ctype == "ListBox":
+        s |= 0x1 | (0x8 if c.multi else 0) | 0x200000
+    elif c.ctype == "ListView":
+        s |= 0x1
+    return s
+
+
+@export()
+def ControlGetStyle(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    return _style_of(c) if c is not None else WinGetStyle(win and f"ahk_id {win}")
+
+
+@export()
+def ControlGetExStyle(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is None:
+        return 0
+    return 0x200 if c.ctype in ("Edit", "ListBox", "ListView", "TreeView", "ComboBox", "DateTime", "Hotkey") else 0
+
+
+def _new_style(cur, value):
+    if isinstance(value, str) and value[:1] in ("+", "-", "^"):
+        n = rt().to_int(value[1:])
+        return cur | n if value[0] == "+" else cur & ~n if value[0] == "-" else cur ^ n
+    return rt().to_int(value)
+
+
+@export()
+def ControlSetStyle(value, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is None:
+        return ""
+    from .guiobj import ctrl_set_enabled, ctrl_set_visible, _srv
+    new = _new_style(_style_of(c), value)
+    if bool(new & WS_VISIBLE) != c.visible:
+        ctrl_set_visible(c, int(bool(new & WS_VISIBLE)))
+    if bool(new & WS_DISABLED) == c.enabled:
+        ctrl_set_enabled(c, int(not new & WS_DISABLED))
+    if c.ctype == "Edit" and bool(new & 0x800) != c.readonly:
+        c.readonly = bool(new & 0x800)
+        _srv().call("set", ctrl=c.cid, prop="ReadOnly", value=int(c.readonly))
     return ""
 
 
 @export()
-def ControlGetItems(*a):
-    return AhkArray(None, [])
-
-
-@export()
-def ControlGetChoice(*a):
+def ControlSetExStyle(value, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    _ctl(control, t, txt, xt, xx)
     return ""
 
 
 @export()
-def ControlGetIndex(*a):
-    return 0
+def ControlAddItem(s, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    from .guiobj import _srv
+    return _srv().call("items", ctrl=c.cid, add=[S(s)])
 
 
 @export()
-def ControlGetStyle(*a):
-    return 0
-
-
-@export()
-def ControlGetExStyle(*a):
-    return 0
-
-
-@export()
-def ControlSetStyle(*a):
+def ControlDeleteItem(n, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    i = rt().to_int(n)
+    if not 1 <= i <= len(_items(c)):
+        throw("ValueError", "Parameter #1 of ControlDeleteItem is invalid.", n)
+    from .guiobj import _srv
+    _srv().call("items", ctrl=c.cid, delete=i)
     return ""
 
 
 @export()
-def ControlSetExStyle(*a):
+def ControlFindItem(s, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox", "ListBox", "Tab")
+    sl = S(s).lower()
+    idx = next((i for i, it in enumerate(_items(c), 1) if it.lower() == sl), 0)
+    if not idx:
+        throw("TargetError", "Target item not found.", S(s))
+    return idx
+
+
+@export()
+def ControlShowDropDown(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox")
+    from .guiobj import _srv
+    _srv().call("dropdown", ctrl=c.cid, show=True)
     return ""
 
 
 @export()
-def ControlAddItem(*a):
-    return 0
-
-
-@export()
-def ControlDeleteItem(*a):
-    return ""
-
-
-@export()
-def ControlFindItem(*a):
-    return 0
-
-
-@export()
-def ControlShowDropDown(*a):
-    return ""
-
-
-@export()
-def ControlHideDropDown(*a):
+def ControlHideDropDown(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "DDL", "ComboBox")
+    from .guiobj import _srv
+    _srv().call("dropdown", ctrl=c.cid, show=False)
     return ""
 
 
 @export()
 def ControlEditPaste(text, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is not None:
+        _need(c, "Edit", "ComboBox")
+        from .guiobj import _srv
+        if c.ctype == "ComboBox":
+            from .guiobj import ctrl_get
+            _gset(c, "Text", ctrl_get(c, "Text") + S(text))
+        else:
+            _srv().call("paste", ctrl=c.cid, text=S(text))
+        return ""
     from .input_ import send_to_window
-    send_to_window(_target_for_control(control, t, txt, xt, xx), S(text), raw=True)
+    send_to_window(win, S(text), raw=True)
+    return ""
+
+
+def _edit(control, t, txt, xt, xx, what):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "Edit")
+    from .guiobj import _srv
+    return _srv().call("query", ctrl=c.cid, what=what)
+
+
+@export()
+def EditGetLineCount(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    return len(_edit(control, t, txt, xt, xx, "lines"))
+
+
+@export()
+def EditGetCurrentLine(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    return _edit(control, t, txt, xt, xx, "caret")[0]
+
+
+@export()
+def EditGetCurrentCol(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    return _edit(control, t, txt, xt, xx, "caret")[1]
+
+
+@export()
+def EditGetLine(n, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    lines = _edit(control, t, txt, xt, xx, "lines")
+    i = rt().to_int(n)
+    if not 1 <= i <= len(lines):
+        throw("ValueError", "Parameter #1 of EditGetLine is invalid.", n)
+    return lines[i - 1]
+
+
+@export()
+def EditGetSelectedText(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    return _edit(control, t, txt, xt, xx, "seltext")
+
+
+@export()
+def ListViewGetContent(options="", control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c = _need(_ctl(control, t, txt, xt, xx)[0], "ListView")
+    from .guiobj import _lv
+    return _lv(c, "content", opts=S(options) if options is not UNSET else "")
+
+
+def _statusbar(t, txt, xt, xx):
+    from .guiobj import gui_for_window
+    win = _win_arg(t, txt, xt, xx)
+    g = gui_for_window(win)
+    sb = next((c for c in g.ctrls if c.ctype == "StatusBar"), None) if g is not None else None
+    if sb is None and g is not None:
+        throw("TargetError", "Target control not found.")
+    return sb
+
+
+@export()
+def StatusBarGetText(part=1, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    sb = _statusbar(t, txt, xt, xx)
+    if sb is None:
+        return ""
+    from .guiobj import sb_text
+    return sb_text(sb, rt().to_int(part) if part not in (UNSET, "") else 1)
+
+
+@export()
+def StatusBarWait(bartext=UNSET, timeout=UNSET, part=1, t=UNSET, txt=UNSET, interval=50, xt=UNSET, xx=UNSET):
+    sb = _statusbar(t, txt, xt, xx)
+    if sb is None:
+        return 0
+    from .guiobj import sb_text
+    want = S(bartext) if bartext is not UNSET else ""
+    p = rt().to_int(part) if part not in (UNSET, "") else 1
+    mode = rt().thread.settings.title_match_mode
+    r = rt()
+    end = None if timeout in (UNSET, "") else time.monotonic() + float(r.to_num(timeout))
+    step = r.to_int(interval) if interval not in (UNSET, "") else 50
+    while True:
+        cur = sb_text(sb, p)
+        if (cur == "" if want == "" else _str_match(want, cur, mode)):
+            return 1
+        if end is not None and time.monotonic() >= end:
+            return 0
+        r.sleep(step)
+
+
+
+@export()
+def MenuSelect(t=UNSET, txt=UNSET, menu=UNSET, *rest):
+    """Choose an item from one of this script's Gui menu bars (other apps' menus aren't reachable on X11)."""
+    from .guiobj import gui_for_window
+    names = [menu, *rest][:7]
+    xt = names.pop() if len(names) == 7 else UNSET
+    xx = UNSET
+    win = _win_arg(t, txt, xt, xx)
+    g = gui_for_window(win)
+    if g is None or g.menubar is None:
+        throw("TargetError", "Target menu not found.")
+    m = g.menubar
+    path = [S(n) for n in names if n is not UNSET and S(n) != ""]
+    for depth, name in enumerate(path):
+        it = m.find_item(name, required=False)
+        if it is None:
+            throw("TargetError", "Target menu item not found.", name)
+        if depth == len(path) - 1:
+            if it.sub is not None:
+                throw("TargetError", "Target menu item is a submenu.", name)
+            m.activate(m.items.index(it))
+            return ""
+        if it.sub is None:
+            throw("TargetError", "Target menu item not found.", name)
+        m = it.sub
+    return ""
+
+
+# ---------------------------------------------------------------- window messages
+# SendMessage/PostMessage reach OnMessage handlers for this script's own windows, and the common Win32 messages are
+# translated for this script's Gui controls and for any window (WM_CLOSE, WM_SYSCOMMAND).
+WM_CLOSE, WM_SETTEXT, WM_GETTEXTLENGTH, WM_SYSCOMMAND = 0x10, 0x0C, 0x0E, 0x112
+
+
+def _msg_target(control, t, txt, xt, xx):
+    from .guiobj import GUIS
+    if isinstance(control, AhkObject) or (control is not UNSET and S(control) != ""):
+        c, win = _ctl(control, t, txt, xt, xx)
+        return c, win
+    if t is UNSET and txt is UNSET:
+        throw("TargetError", "Target window not found.")
+    if type(t) is int and any(g.wid == t for g in GUIS.values()):
+        return None, next(g.xid or g.wid for g in GUIS.values() if g.wid == t)
+    return None, _win_arg(t, txt, xt, xx)
+
+
+def _num_arg(v):
+    if isinstance(v, str) and not v.strip().lstrip("-").isdigit():
+        from .strings import StrPtr
+        return StrPtr(v)
+    if isinstance(v, AhkObject):
+        return rt().to_int(rt().get_prop(v, "Ptr"))
+    return rt().to_int(v) if v not in (UNSET, "") else 0
+
+
+def _builtin_message(c, win, msg, wp, lp):
+    """Win32 messages with an X11/GTK meaning.  Returns (handled, result)."""
+    from .guiobj import _srv, ctrl_get, gui_for_window, gui_state
+    d = _dpy()
+    if msg == WM_CLOSE and c is None:
+        _client_msg(d, win, "_NET_CLOSE_WINDOW", [0, 2, 0, 0, 0])
+        return True, 0
+    if msg == WM_SYSCOMMAND and c is None:
+        g = gui_for_window(win)
+        sc = wp & 0xFFF0
+        if sc == 0xF060:
+            _client_msg(d, win, "_NET_CLOSE_WINDOW", [0, 2, 0, 0, 0])
+        elif sc == 0xF020:
+            gui_state(g, "min") if g else d.x.XIconifyWindow(d.dpy, win, d.x.XDefaultScreen(d.dpy))
+        elif sc == 0xF030:
+            gui_state(g, "max") if g else _wm_state(d, win, 1, "_NET_WM_STATE_MAXIMIZED_VERT",
+                                                    "_NET_WM_STATE_MAXIMIZED_HORZ")
+        elif sc == 0xF120:
+            gui_state(g, "restore") if g else _wm_state(d, win, 0, "_NET_WM_STATE_MAXIMIZED_VERT",
+                                                        "_NET_WM_STATE_MAXIMIZED_HORZ")
+        else:
+            return False, 0
+        d.flush()
+        return True, 0
+    if c is None:
+        return False, 0
+    t = c.ctype
+    if msg == 0xF5 and t in ("Button", "CheckBox", "Radio"):                  # BM_CLICK
+        _srv().call("click", ctrl=c.cid)
+        return True, 0
+    if msg == 0xF0 and t in ("CheckBox", "Radio"):                            # BM_GETCHECK
+        v = ctrl_get(c, "Value")
+        return True, 2 if v == -1 else v
+    if msg == 0xF1 and t in ("CheckBox", "Radio"):                            # BM_SETCHECK
+        _gset(c, "Value", -1 if wp == 2 else int(bool(wp)), notify=False)
+        return True, 0
+    if (msg == 0x14E and t in ("DDL", "ComboBox")) or (msg == 0x186 and t == "ListBox") or \
+            (msg == 0x130C and t == "Tab"):                                   # CB_/LB_/TCM_SETCURSEL
+        _gset(c, "Value", (wp & 0xFFFFFFFF) + 1 if wp != -1 and wp != 0xFFFFFFFF else 0, notify=False)
+        return True, wp
+    if (msg == 0x147 and t in ("DDL", "ComboBox")) or (msg == 0x188 and t == "ListBox") or \
+            (msg == 0x130B and t == "Tab"):                                   # CB_/LB_/TCM_GETCURSEL
+        v = ctrl_get(c, "Value")
+        v = v if isinstance(v, int) else (v.items[0] if v.items else 0)
+        return True, v - 1
+    if (msg == 0x146 and t in ("DDL", "ComboBox")) or (msg == 0x18B and t == "ListBox") or \
+            (msg == 0x1304 and t == "Tab"):                                   # CB_/LB_/TCM_GETCOUNT
+        return True, len(_items(c))
+    if msg == 0xBA and t == "Edit":                                           # EM_GETLINECOUNT
+        return True, len(_srv().call("query", ctrl=c.cid, what="lines"))
+    if msg == WM_GETTEXTLENGTH:
+        v = ctrl_get(c, "Text")
+        return True, len(v) if isinstance(v, str) else 0
+    if msg == WM_SETTEXT:
+        from .buffer import StrGet
+        _gset(c, "Text", StrGet(lp) if lp else "")
+        return True, 1
+    if msg == 0x0A:                                                          # WM_ENABLE
+        from .guiobj import ctrl_set_enabled
+        ctrl_set_enabled(c, int(bool(wp)))
+        return True, 0
+    return False, 0
+
+
+def _deliver(msg, wp, lp, c, win, sync):
+    from .flow import message_handlers
+    from .guiobj import gui_for_window
+    hwnd = c.cid if c is not None else win
+    ours = c is not None or gui_for_window(win) is not None or (win and win == getattr(rt(), "script_hwnd", 0))
+    handled, result = _builtin_message(c, win, msg, wp, lp)
+    if not ours:
+        return result
+    r = rt()
+    for fn in message_handlers(msg):
+        if sync:
+            res = r.call(fn, [wp, lp, msg, hwnd])
+            if res != "" and res is not None:
+                return res
+        else:
+            r.post(lambda fn=fn: r.call(fn, [wp, lp, msg, hwnd]))
+    return result
+
+
+@export()
+def PostMessage(msg, wparam=0, lparam=0, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    c, win = _msg_target(control, t, txt, xt, xx)
+    _deliver(rt().to_int(msg), _num_arg(wparam), _num_arg(lparam), c, win, False)
     return ""
 
 
 @export()
-def EditGetLineCount(*a):
-    return 1
-
-
-@export()
-def EditGetCurrentLine(*a):
-    return 1
-
-
-@export()
-def EditGetCurrentCol(*a):
-    return 1
-
-
-@export()
-def EditGetLine(*a):
-    return ""
-
-
-@export()
-def EditGetSelectedText(*a):
-    return ""
-
-
-@export()
-def ListViewGetContent(*a):
-    return ""
-
-
-@export()
-def StatusBarGetText(*a):
-    return ""
-
-
-@export()
-def StatusBarWait(*a):
-    return 0
-
-
-@export()
-def MenuSelect(*a):
-    return ""
-
-
-@export()
-def PostMessage(*a):
-    return ""
-
-
-@export()
-def SendMessage(*a):
-    return 0
+def SendMessage(msg, wparam=0, lparam=0, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET, timeout=5000):
+    c, win = _msg_target(control, t, txt, xt, xx)
+    return _deliver(rt().to_int(msg), _num_arg(wparam), _num_arg(lparam), c, win, True)
 
 
 # ---------------------------------------------------------------- pixels
@@ -1101,43 +1705,75 @@ def ImageSearch(outx, outy, x1, y1, x2, y2, image):
     return image_search(outx, outy, x1, y1, x2, y2, S(image))
 
 
-@export(byref=(0, 1, 2, 3))
+def _monitors():
+    """[(name, left, top, right, bottom, primary)] in AutoHotkey's order (primary first is NOT implied)."""
+    from .. import xlib
+    d = _dpy()
+    mons = xlib.monitors(d) if d is not None else []
+    if not mons:
+        w, h = screen_size()
+        return [("DISPLAY1", 0, 0, w, h, True)]
+    return [(n, x, y, x + w, y + h, p) for n, x, y, w, h, p in mons]
+
+
+def _monitor_n(n):
+    mons = _monitors()
+    if n is UNSET or n == "":
+        return mons, next((i for i, m in enumerate(mons) if m[5]), 0)
+    i = rt().to_int(n) - 1
+    if not 0 <= i < len(mons):
+        throw("ValueError", "Parameter #1 of MonitorGet is invalid.", n)
+    return mons, i
+
+
+@export(byref=(1, 2, 3, 4))
 def MonitorGet(n=UNSET, left=UNSET, top=UNSET, right=UNSET, bottom=UNSET):
-    w, h = screen_size()
-    setref(left, 0); setref(top, 0); setref(right, w); setref(bottom, h)
-    return 1
+    mons, i = _monitor_n(n)
+    _, l, t, r, b, _p = mons[i]
+    setref(left, l); setref(top, t); setref(right, r); setref(bottom, b)
+    return i + 1
 
 
 @export(byref=(1, 2, 3, 4))
 def MonitorGetWorkArea(n=UNSET, left=UNSET, top=UNSET, right=UNSET, bottom=UNSET):
+    mons, i = _monitor_n(n)
+    _, l, t, r, b, _p = mons[i]
     d = _dpy()
-    w, h = screen_size()
     wa = d.get_longs(d.root, "_NET_WORKAREA") if d else []
     if len(wa) >= 4:
-        setref(left, int(wa[0])); setref(top, int(wa[1])); setref(right, int(wa[0] + wa[2])); setref(bottom, int(wa[1] + wa[3]))
-    else:
-        setref(left, 0); setref(top, 0); setref(right, w); setref(bottom, h)
-    return 1
+        # _NET_WORKAREA spans all monitors; panels shrink it, so intersect it with this monitor
+        wl, wt, wr, wb = int(wa[0]), int(wa[1]), int(wa[0] + wa[2]), int(wa[1] + wa[3])
+        nl, nt, nr, nb = max(l, wl), max(t, wt), min(r, wr), min(b, wb)
+        if nl < nr and nt < nb:
+            l, t, r, b = nl, nt, nr, nb
+    setref(left, l); setref(top, t); setref(right, r); setref(bottom, b)
+    return i + 1
 
 
 @export()
 def MonitorGetCount():
-    return 1
+    return len(_monitors())
 
 
 @export()
 def MonitorGetPrimary():
-    return 1
+    return next((i + 1 for i, m in enumerate(_monitors()) if m[5]), 1)
 
 
 @export()
 def MonitorGetName(n=UNSET):
-    return "\\\\.\\DISPLAY1"
+    mons, i = _monitor_n(n)
+    return "\\\\.\\DISPLAY%d" % (i + 1)
 
 
 @export()
 def SysGet(n):
     i = rt().to_int(n)
     w, h = screen_size()
-    return {0: w, 1: h, 78: w, 79: h, 80: 1, 16: w, 17: h, 43: 3, 4: 23, 5: 1, 6: 1, 7: 3, 8: 3,
+    if i in (76, 77, 78, 79, 80):
+        mons = _monitors()
+        vl, vt = min(m[1] for m in mons), min(m[2] for m in mons)
+        vr, vb = max(m[3] for m in mons), max(m[4] for m in mons)
+        return {76: vl, 77: vt, 78: vr - vl, 79: vb - vt, 80: len(mons)}[i]
+    return {0: w, 1: h, 16: w, 17: h, 43: 3, 4: 23, 5: 1, 6: 1, 7: 3, 8: 3,
             32: 8, 33: 8, 19: 1}.get(i, 0)
