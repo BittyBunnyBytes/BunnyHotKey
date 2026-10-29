@@ -44,8 +44,9 @@ class Server:
         return cls._inst
 
     def __init__(self):
+        env = dict(os.environ, BHK_TRAY_NAME="Bunny Hot Key - " + os.path.basename(O.RT.script_path))
         self.p = subprocess.Popen([sys.executable, "-I", HELPER], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, text=True, bufsize=1)
+                                  stderr=subprocess.DEVNULL, text=True, bufsize=1, env=env)
         self.ids = itertools.count(1)
         self.replies = {}
         self.cond = threading.Condition()

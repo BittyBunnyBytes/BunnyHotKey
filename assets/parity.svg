@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="548" viewBox="0 0 920 548" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="920" height="548" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="20" y="34" font-size="20" font-weight="700" fill="#1f2328">Bunny Hot Key - parity with AutoHotkey v2</text>
+<text x="20" y="56" font-size="12.5" fill="#59636e">Share of AutoHotkey v2.0.31 behaviour reproduced. Full = 1, partial = 0.5. Details: docs/PARITY.md</text>
+<text x="20" y="89" font-size="13" fill="#1f2328">Language syntax &amp; semantics (v2.0)</text>
+<rect x="300" y="77" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="77" width="326.7" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="89" font-size="13" font-weight="700" fill="#2da44e">99%</text>
+<text x="685" y="89" font-size="11.5" fill="#59636e">all v2.0 constructs; regression suite</text>
+<text x="20" y="119" font-size="13" fill="#1f2328">Real-world v2 scripts that load</text>
+<rect x="300" y="107" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="107" width="326.7" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="119" font-size="13" font-weight="700" fill="#2da44e">99%</text>
+<text x="685" y="119" font-size="11.5" fill="#59636e">243 of 246 from 7 repos</text>
+<text x="20" y="149" font-size="13" fill="#1f2328">Strings / RegEx / Math / Dates</text>
+<rect x="300" y="137" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="137" width="330.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="149" font-size="13" font-weight="700" fill="#2da44e">100%</text>
+<text x="685" y="149" font-size="11.5" fill="#59636e">45 of 45 functions</text>
+<text x="20" y="179" font-size="13" fill="#1f2328">Keyboard &amp; mouse functions</text>
+<rect x="300" y="167" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="167" width="326.7" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="179" font-size="13" font-weight="700" fill="#2da44e">99%</text>
+<text x="685" y="179" font-size="11.5" fill="#59636e">Send, Click, Hotkey(), InputHook...</text>
+<text x="20" y="209" font-size="13" fill="#1f2328">Process / Run / System</text>
+<rect x="300" y="197" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="197" width="316.8" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="209" font-size="13" font-weight="700" fill="#2da44e">96%</text>
+<text x="685" y="209" font-size="11.5" fill="#59636e">Run, Process*, Env*, Sound*, Reg*</text>
+<text x="20" y="239" font-size="13" fill="#1f2328">Files / Dirs / INI</text>
+<rect x="300" y="227" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="227" width="313.5" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="239" font-size="13" font-weight="700" fill="#2da44e">95%</text>
+<text x="685" y="239" font-size="11.5" fill="#59636e">Drive* metadata partial</text>
+<text x="20" y="269" font-size="13" fill="#1f2328">Window functions (Win*)</text>
+<rect x="300" y="257" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="257" width="313.5" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="269" font-size="13" font-weight="700" fill="#2da44e">95%</text>
+<text x="685" y="269" font-size="11.5" fill="#59636e">EWMH; WinGetText/regions partial</text>
+<text x="20" y="299" font-size="13" fill="#1f2328">Tray icon &amp; menu</text>
+<rect x="300" y="287" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="287" width="313.5" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="299" font-size="13" font-weight="700" fill="#2da44e">95%</text>
+<text x="685" y="299" font-size="11.5" fill="#59636e">XFCE live; Cinnamon via XApp monitor</text>
+<text x="20" y="329" font-size="13" fill="#1f2328">Hotkeys &amp; hotstrings (X11)</text>
+<rect x="300" y="317" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="317" width="297.0" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="329" font-size="13" font-weight="700" fill="#2da44e">90%</text>
+<text x="685" y="329" font-size="11.5" fill="#59636e">bare modifiers not suppressible</text>
+<text x="20" y="359" font-size="13" fill="#1f2328">All built-in functions</text>
+<rect x="300" y="347" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="347" width="290.4" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="359" font-size="13" font-weight="700" fill="#d4a72c">88%</text>
+<text x="685" y="359" font-size="11.5" fill="#59636e">271 full, 63 partial, 11 missing</text>
+<text x="20" y="389" font-size="13" fill="#1f2328">Gui</text>
+<rect x="300" y="377" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="377" width="214.5" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="389" font-size="13" font-weight="700" fill="#d4a72c">65%</text>
+<text x="685" y="389" font-size="11.5" fill="#59636e">15 of 23 control types</text>
+<text x="20" y="419" font-size="13" fill="#1f2328">Win32 controls (Control*, Edit*)</text>
+<rect x="300" y="407" width="330" height="16" rx="4" fill="#eef1f4"/>
+<rect x="300" y="407" width="201.3" height="16" rx="4" fill="#d4a72c"/>
+<text x="640" y="419" font-size="13" font-weight="700" fill="#d4a72c">61%</text>
+<text x="685" y="419" font-size="11.5" fill="#59636e">no Win32 controls on Linux</text>
+<text x="20" y="449" font-size="13" fill="#1f2328">COM / ActiveX</text>
+<rect x="300" y="437" width="330" height="16" rx="4" fill="#eef1f4"/>
+<text x="640" y="449" font-size="13" font-weight="700" fill="#cf222e">0%</text>
+<text x="685" y="449" font-size="11.5" fill="#59636e">Windows-only</text>
+<text x="20" y="479" font-size="13" fill="#1f2328">Wayland input</text>
+<rect x="300" y="467" width="330" height="16" rx="4" fill="#eef1f4"/>
+<text x="640" y="479" font-size="13" font-weight="700" fill="#cf222e">0%</text>
+<text x="685" y="479" font-size="11.5" fill="#59636e">dropped for now</text>
+<rect x="20" y="511" width="12" height="12" rx="3" fill="#2da44e"/>
+<text x="38" y="522" font-size="12" fill="#1f2328">90%+ complete</text>
+<rect x="210" y="511" width="12" height="12" rx="3" fill="#d4a72c"/>
+<text x="228" y="522" font-size="12" fill="#1f2328">partial: 60-89%</text>
+<rect x="400" y="511" width="12" height="12" rx="3" fill="#cf222e"/>
+<text x="418" y="522" font-size="12" fill="#1f2328">missing / left to do</text>
+</svg>

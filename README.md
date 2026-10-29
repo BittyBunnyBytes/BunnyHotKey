@@ -2,6 +2,30 @@
 
 # Bunny Hot Key (BHK)
 
+<p align="center">
+  <a href="https://ko-fi.com/bittybunnybytes"><img src="https://img.shields.io/badge/Ko--fi-Support%20Bunny%20Hot%20Key-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support Bunny Hot Key on Ko-fi"></a>
+</p>
+
+> **If Bunny Hot Key saves your AutoHotkey scripts on Linux, please [buy me a coffee on Ko-fi](https://ko-fi.com/bittybunnybytes).**
+> Every tip goes into closing the gaps below: more Gui controls, Wayland and COM bridges.
+
+## How close is it to AutoHotkey?
+
+<p align="center"><img src="assets/parity.svg" alt="Parity with AutoHotkey v2 by area: language 99%, built-in functions 88%, Gui 65%, COM and Wayland 0%" width="860"></p>
+
+**In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
+**88% of its built-in function API** is reproduced (271 full, 63 partial, 11 missing).
+
+**Missing or left to do:**
+- **COM/ActiveX:** Windows-only.
+- **Wayland input:** dropped for now.
+- **Gui:** 8 control types to go (TreeView, Tab, UpDown, Hotkey, DateTime, MonthCal, ActiveX, Custom).
+- **Reading other apps' Win32 controls** (`ControlGetText` and similar).
+- **Some DllCalls.**
+
+The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
+
+
 Run **AutoHotkey v2** scripts natively on **Linux (X11)**.
 
 BHK is a compatibility layer in the spirit of Wine/Proton, but it doesn't

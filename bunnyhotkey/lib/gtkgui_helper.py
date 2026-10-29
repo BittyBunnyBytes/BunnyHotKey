@@ -417,6 +417,7 @@ class Tray:
             gi.require_version("XApp", "1.0")
             from gi.repository import XApp
             self.icon = XApp.StatusIcon()
+            self.icon.set_name(os.environ.get("BHK_TRAY_NAME", "Bunny Hot Key"))
             self.icon.connect("activate", self._xapp_activate)
             self.icon.set_secondary_menu(self.menu)
             self.kind = "xapp"
@@ -543,6 +544,8 @@ def on_line(source, _cond):
 
 
 def main():
+    GLib.set_prgname("bunnyhotkey")
+    GLib.set_application_name("Bunny Hot Key")
     if os.path.exists(ICON):
         Gtk.Window.set_default_icon_from_file(ICON)
     GLib.io_add_watch(sys.stdin, GLib.IO_IN | GLib.IO_HUP, on_line)
