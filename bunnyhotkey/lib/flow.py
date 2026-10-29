@@ -168,6 +168,8 @@ def Pause(newstate=UNSET):
         r.paused = not r.paused
     else:
         r.paused = False
+    from . import tray
+    tray.refresh()
     return ""
 
 
@@ -185,6 +187,8 @@ def Suspend(mode=-1):
         r.hotstrings.suspended = r.suspended
     if r.backend is not None:
         r.backend.refresh()
+    from . import tray
+    tray.refresh()
     return ""
 
 

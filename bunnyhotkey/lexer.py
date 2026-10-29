@@ -377,7 +377,7 @@ class SourceReader:
             raise AhkSyntaxError(f"Missing {open_quote}", self.filename, ln)
         if balance < 0:
             raise AhkSyntaxError("Unexpected closing bracket", self.filename, ln)
-        first_word = _first_word(re.sub(r"^(\}\s*)?(else\s+|try\s+)?", "", buf, flags=re.I) if buf.startswith("}") else buf)
+        first_word = _first_word(re.sub(r"^[}\s]+", "", buf))
         while True:
             nxt = self._peek_code_line()
             if balance == 0:

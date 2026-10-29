@@ -354,10 +354,12 @@ def dispatch_event(msg):
     ev = msg["event"]
     if ev == "MenuPick":
         m = MENUS.get(msg["menu"])
-        if m is not None and 0 <= msg["index"] < len(m.items):
-            name, cb = m.items[msg["index"]]
-            if cb is not None:
-                r.post(lambda: r.call(cb, [name, msg["index"] + 1, m]))
+        if m is not None:
+            m.activate(msg["index"])
+        return
+    if ev in ("TrayItem", "TrayDefault"):
+        from . import tray
+        tray.on_event(msg)
         return
     if "ctrl" in msg:
         c = CTRLS.get(msg["ctrl"])
@@ -540,40 +542,139 @@ def tooltip(n, text, x, y):
     _srv().call("tooltip", n=n, text=text, x=int(x), y=int(y))
 
 
-# ---------------------------------------------------------------- Menu
+# ---------------------------------------------------------------- Menu (script_menu.cpp)
 MENUS: dict[int, "MenuObj"] = {}
 _menu_ids = itertools.count(1)
 
 
+class MenuItem:
+    __slots__ = ("name", "cb", "checked", "enabled", "builtin")
+
+    def __init__(self, name, cb=None, builtin=None):
+        self.name = name
+        self.cb = cb
+        self.checked = None        # None = not a check item
+        self.enabled = True
+        self.builtin = builtin     # python callable for standard tray items
+
+
 class MenuObj(AhkObject):
-    __slots__ = ("mid", "items")
+    __slots__ = ("mid", "items", "default", "click_count", "on_change")
 
     def __init__(self, proto=None):
         super().__init__(proto or CLASSES["Menu"].prototype)
         self.mid = next(_menu_ids)
-        self.items = []
+        self.items: list[MenuItem] = []
+        self.default = ""
+        self.click_count = 2
+        self.on_change = None
         MENUS[self.mid] = self
 
+    def find_item(self, name, required=True):
+        if type(name) is int or (isinstance(name, str) and name.endswith("&") and name[:-1].isdigit()):
+            i = int(str(name).rstrip("&")) - 1
+            if 0 <= i < len(self.items):
+                return self.items[i]
+        else:
+            key = S(name).replace("&", "").lower()
+            for it in self.items:
+                if it.name.replace("&", "").lower() == key:
+                    return it
+        if required:
+            throw("Error", "Nonexistent menu item.", S(name))
+        return None
 
-def _menu_add(m, name=UNSET, cb=UNSET, opts=""):
-    if name is UNSET:
-        m.items.append(("", None))
-        return ""
-    n = S(name)
-    for i, (nm, _) in enumerate(m.items):
-        if nm.lower() == n.lower():
-            m.items[i] = (n, None if cb is UNSET else cb)
+    def changed(self):
+        if self.on_change is not None:
+            self.on_change()
+
+    def wire(self):
+        """Item list for the GTK side."""
+        dflt = self.default.replace("&", "").lower()
+        return [{"label": it.name, "checked": it.checked, "enabled": it.enabled,
+                 "default": bool(dflt) and it.name.replace("&", "").lower() == dflt} for it in self.items]
+
+    def activate(self, index):
+        r = rt()
+        if not (0 <= index < len(self.items)):
+            return
+        it = self.items[index]
+        if it.builtin is not None:
+            r.post(it.builtin)
+        elif it.cb is not None:
+            r.post(lambda: r.call(it.cb, [it.name, index + 1, self]))
+
+
+def _menu_add(m, name=UNSET, cb=UNSET, opts="", before=None):
+    if name is UNSET or S(name) == "":
+        item = MenuItem("")
+    else:
+        existing = m.find_item(name, required=False)
+        if existing is not None and before is None:
+            if cb is not UNSET:
+                existing.cb, existing.builtin = cb, None
+            _menu_opts(existing, S(opts))
+            m.changed()
             return ""
-    m.items.append((n, None if cb is UNSET else cb))
+        if cb is UNSET:
+            throw("Error", "Missing a required parameter.", S(name))
+        item = MenuItem(S(name), cb)
+        _menu_opts(item, S(opts))
+    if before is not None:
+        b = m.find_item(before)
+        m.items.insert(m.items.index(b), item)
+    else:
+        m.items.append(item)
+    m.changed()
     return ""
+
+
+def _menu_opts(item, opts):
+    for o in opts.split():
+        ol = o.lower()
+        if ol in ("+radio", "radio", "+check"):
+            item.checked = bool(item.checked)
 
 
 def _menu_delete(m, name=UNSET):
     if name is UNSET:
         m.items.clear()
+        m.default = ""
     else:
-        m.items = [it for it in m.items if it[0].lower() != S(name).lower()]
+        m.items.remove(m.find_item(name))
+    m.changed()
     return ""
+
+
+def _menu_set(m, name, attr, value):
+    it = m.find_item(name)
+    if value == "toggle":
+        value = not bool(getattr(it, attr))
+    setattr(it, attr, value)
+    m.changed()
+    return ""
+
+
+def _menu_rename(m, old, new=""):
+    it = m.find_item(old)
+    if S(new) == "":
+        it.name, it.cb, it.builtin = "", None, None
+    else:
+        it.name = S(new)
+    m.changed()
+    return ""
+
+
+def _menu_set_default(m, v):
+    m.default = "" if v == "" else (m.find_item(v).name if v is not UNSET else "")
+    m.changed()
+    return v
+
+
+def _menu_set_clicks(m, v):
+    m.click_count = 1 if rt().to_int(v) == 1 else 2
+    m.changed()
+    return v
 
 
 def menu_setup():
@@ -584,30 +685,33 @@ def menu_setup():
     CLASSES["Menu"].factory = lambda proto: MenuObj(proto)
     CLASSES["MenuBar"].factory = lambda proto: MenuObj(proto)
     method(mp, "Add", lambda this, name=UNSET, cb=UNSET, opts="": _menu_add(this, name, cb, opts))
-    method(mp, "Insert", lambda this, before=UNSET, name=UNSET, cb=UNSET, opts="": _menu_add(this, name, cb, opts))
+    method(mp, "Insert", lambda this, before=UNSET, name=UNSET, cb=UNSET, opts="":
+           _menu_add(this, name, cb, opts, before if before not in (UNSET, "") else None))
     method(mp, "Delete", lambda this, name=UNSET: _menu_delete(this, name))
-    method(mp, "Rename", lambda this, old, new="": "")
-    method(mp, "Check", lambda this, name: "")
-    method(mp, "Uncheck", lambda this, name: "")
-    method(mp, "ToggleCheck", lambda this, name: "")
-    method(mp, "Enable", lambda this, name: "")
-    method(mp, "Disable", lambda this, name: "")
-    method(mp, "ToggleEnable", lambda this, name: "")
+    method(mp, "Rename", lambda this, old, new="": _menu_rename(this, old, new))
+    method(mp, "Check", lambda this, name: _menu_set(this, name, "checked", True))
+    method(mp, "Uncheck", lambda this, name: _menu_set(this, name, "checked", False))
+    method(mp, "ToggleCheck", lambda this, name: _menu_set(this, name, "checked", "toggle"))
+    method(mp, "Enable", lambda this, name: _menu_set(this, name, "enabled", True))
+    method(mp, "Disable", lambda this, name: _menu_set(this, name, "enabled", False))
+    method(mp, "ToggleEnable", lambda this, name: _menu_set(this, name, "enabled", "toggle"))
     method(mp, "SetIcon", lambda this, *a: "")
-    method(mp, "AddStandard", lambda this: "")
     method(mp, "SetColor", lambda this, *a: "")
+    method(mp, "AddStandard", lambda this: _add_standard(this))
     method(mp, "Show", lambda this, x=UNSET, y=UNSET, wait=1:
-           _srv().call("menu", menu=this.mid, items=[nm for nm, _ in this.items]) and "")
-    prop(mp, "Default", get=lambda this: "", set=lambda this, v: v)
-    prop(mp, "ClickCount", get=lambda this: 2, set=lambda this, v: v)
+           _srv().call("menu", menu=this.mid, items=[it.name for it in this.items]) and "")
+    prop(mp, "Default", get=lambda this: this.default, set=lambda this, v: _menu_set_default(this, v))
+    prop(mp, "ClickCount", get=lambda this: this.click_count, set=lambda this, v: _menu_set_clicks(this, v))
     prop(mp, "Handle", get=lambda this: this.mid)
 
 
-_tray = None
+def _add_standard(m):
+    from . import tray
+    tray.add_standard_items(m)
+    m.changed()
+    return ""
 
 
 def tray_menu():
-    global _tray
-    if _tray is None:
-        _tray = MenuObj()
-    return _tray
+    from . import tray
+    return tray.menu()

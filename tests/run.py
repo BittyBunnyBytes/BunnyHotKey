@@ -32,10 +32,12 @@ def main():
                 if g != w:
                     print(f"  line {i + 1}: got {g!r} want {w!r}")
                     break
-    r = subprocess.run([sys.executable, os.path.join(HERE, "test_input.py")], capture_output=True, text=True, cwd=ROOT)
-    print("PASS test_input.py" if r.returncode == 0 else "FAIL test_input.py\n" + r.stdout)
-    failed += r.returncode != 0
-    total = len(scripts) + 1
+    py_tests = ["test_input.py", "test_tray.py"]
+    for t in py_tests:
+        r = subprocess.run([sys.executable, os.path.join(HERE, t)], capture_output=True, text=True, cwd=ROOT)
+        print(f"PASS {t}" if r.returncode == 0 else f"FAIL {t}\n" + r.stdout)
+        failed += r.returncode != 0
+    total = len(scripts) + len(py_tests)
     print(f"{total - failed}/{total} passed")
     return 1 if failed else 0
 

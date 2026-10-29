@@ -144,8 +144,12 @@ def register_vars(rt):
     rw("A_HotkeyModifierTimeout", lambda: getattr(rt, "hk_mod_timeout", 50), lambda v: setattr(rt, "hk_mod_timeout", rt.to_int(v)))
     rw("A_MenuMaskKey", lambda: getattr(rt, "menu_mask_key", "vkE8"), lambda v: setattr(rt, "menu_mask_key", rt.to_str(v)))
     rw("A_AllowMainWindow", lambda: 0, lambda v: None)
-    rw("A_IconHidden", lambda: int(getattr(rt, "icon_hidden", False)), lambda v: setattr(rt, "icon_hidden", to_bool(v)))
-    rw("A_IconTip", lambda: getattr(rt, "icon_tip", ""), lambda v: setattr(rt, "icon_tip", rt.to_str(v)))
+    def _tray_set(attr, value):
+        setattr(rt, attr, value)
+        from . import tray
+        tray.refresh()
+    rw("A_IconHidden", lambda: int(getattr(rt, "icon_hidden", False)), lambda v: _tray_set("icon_hidden", to_bool(v)))
+    rw("A_IconTip", lambda: getattr(rt, "icon_tip", ""), lambda v: _tray_set("icon_tip", rt.to_str(v)))
     ro("A_IconFile", lambda: "")
     ro("A_IconNumber", lambda: "")
     rw("A_TrayMenu", lambda: _tray(rt), None)

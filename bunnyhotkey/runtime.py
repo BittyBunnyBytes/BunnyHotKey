@@ -246,7 +246,7 @@ def _assigned_names(stmts, out: set, declared: dict):
         if isinstance(s, A.Decl):
             for name, init in s.items:
                 declared.setdefault(s.kind, set()).add(name.lower())
-                visit_expr(init)
+                visit_expr(init[1] if isinstance(init, tuple) else init)
             if not s.items:
                 declared.setdefault("assume_" + s.kind, True)
             return
@@ -718,7 +718,7 @@ class Runtime:
             self.depth = saved_depth
 
     def _fire_due_timers(self, only_check=False):
-        if not self.timers:
+        if not self.timers or self.paused:
             return
         now = time.monotonic()
         for t in list(self.timers):

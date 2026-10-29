@@ -72,7 +72,7 @@ class Loader:
         if spec.lower().startswith("*i"):
             ignore = True
             spec = spec[2:].strip()
-        spec = spec.strip('"')
+        spec = spec.strip("\"'")
         spec = self._expand_vars(spec, ll)
         if spec.startswith("<") and spec.endswith(">"):
             name = spec[1:-1]
@@ -95,6 +95,7 @@ class Loader:
                 p = os.path.join(self.include_dir or os.getcwd(), p)
             else:
                 p = host_path(spec)
+            p = os.path.normpath(p.replace("\\", "/"))   # "%A_LineFile%\..\x" -> the file's folder
             p = self._ci(p) or p
             if os.path.isdir(p):
                 self.include_dir = p
@@ -264,6 +265,12 @@ class Program:
                     code = 2
             rt.auto_exec_done = True
             rt.defaults = rt.thread.settings
+            if rt.is_persistent():
+                from .lib import tray
+                try:
+                    tray.show()
+                except AhkThrow:
+                    pass
             rt.idle_loop()
             code = rt.exit_code or code
         except ExitAppEx as e:

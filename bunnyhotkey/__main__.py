@@ -34,6 +34,8 @@ def main(argv=None) -> int:
                 argv.pop(0)
         elif al.startswith("backend"):
             options["backend"] = a.split("=", 1)[1] if "=" in a else argv.pop(0)
+        elif al == "no-tray":
+            options["no_tray"] = True
         elif al in ("no-gui-errors", "console"):
             options["gui_errors"] = False
         elif al in ("version", "v"):

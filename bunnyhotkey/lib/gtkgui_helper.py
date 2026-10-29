@@ -370,6 +370,21 @@ def handle(req):
             tw.show_all()
             tips[n] = tw
         return True
+    if op == "tray":
+        return tray_op(req)
+    if op == "info":
+        w = Gtk.Window(title=req.get("title", ""))
+        w.set_default_size(560, 380)
+        tv = Gtk.TextView()
+        tv.set_editable(False)
+        tv.set_monospace(True)
+        tv.get_buffer().set_text(req.get("text", ""))
+        sw = Gtk.ScrolledWindow()
+        sw.add(tv)
+        w.add(sw)
+        w.show_all()
+        w.present()
+        return True
     if op == "menu":
         m = Gtk.Menu()
         for i, label in enumerate(req["items"]):
@@ -384,6 +399,134 @@ def handle(req):
         menus[req["menu"]] = m
         return True
     raise ValueError(f"unknown op {op}")
+
+
+# ---------------------------------------------------------------- tray icon
+class Tray:
+    """AutoHotkey-style tray icon.  XApp.StatusIcon (Cinnamon/XFCE/MATE, SNI + XEmbed), else
+    Gtk.StatusIcon (XEmbed trays), else AppIndicator3 (KDE/GNOME, menu only)."""
+
+    def __init__(self):
+        self.items = []
+        self.menu = Gtk.Menu()
+        self.kind = None
+        self.icon = None
+        self.click_count = 2
+        self._last_click = 0
+        try:
+            gi.require_version("XApp", "1.0")
+            from gi.repository import XApp
+            self.icon = XApp.StatusIcon()
+            self.icon.connect("activate", self._xapp_activate)
+            self.icon.set_secondary_menu(self.menu)
+            self.kind = "xapp"
+        except (ValueError, ImportError):
+            pass
+        if self.icon is None:
+            try:
+                self.icon = Gtk.StatusIcon()
+                self.icon.connect("button-press-event", self._gtk_press)
+                self.icon.connect("popup-menu", self._gtk_popup)
+                self.kind = "gtk"
+            except (AttributeError, TypeError):
+                self.icon = None
+        if self.icon is None:
+            gi.require_version("AppIndicator3", "0.1")
+            from gi.repository import AppIndicator3
+            self.icon = AppIndicator3.Indicator.new("bunnyhotkey", "bunnyhotkey",
+                                                     AppIndicator3.IndicatorCategory.APPLICATION_STATUS)
+            self.icon.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+            self.icon.set_menu(self.menu)
+            self.kind = "appindicator"
+
+    def _xapp_activate(self, _icon, button, _time):
+        if button == 1:
+            self._primary_click()
+
+    def _gtk_press(self, _icon, ev):
+        from gi.repository import Gdk
+        if ev.button == 1:
+            if ev.type == Gdk.EventType._2BUTTON_PRESS:
+                if self.click_count == 2:
+                    emit({"event": "TrayDefault"})
+            elif ev.type == Gdk.EventType.BUTTON_PRESS and self.click_count == 1:
+                emit({"event": "TrayDefault"})
+        return False
+
+    def _gtk_popup(self, icon, button, time):
+        self.menu.popup(None, None, Gtk.StatusIcon.position_menu, icon, button, time)
+
+    def _primary_click(self):
+        import time
+        now = time.monotonic()
+        if self.click_count == 1 or now - self._last_click < 0.45:
+            emit({"event": "TrayDefault"})
+            self._last_click = 0
+        else:
+            self._last_click = now
+
+    def set_icon(self, path):
+        if self.kind == "xapp":
+            self.icon.set_icon_name(path)
+        elif self.kind == "gtk":
+            self.icon.set_from_file(path)
+        else:
+            self.icon.set_icon_full(path, "Bunny Hot Key")
+
+    def set_tip(self, text):
+        if self.kind in ("xapp", "gtk"):
+            self.icon.set_tooltip_text(text)
+        else:
+            self.icon.set_title(text)
+
+    def set_visible(self, v):
+        if self.kind in ("xapp", "gtk"):
+            self.icon.set_visible(v)
+        else:
+            from gi.repository import AppIndicator3
+            self.icon.set_status(AppIndicator3.IndicatorStatus.ACTIVE if v else AppIndicator3.IndicatorStatus.PASSIVE)
+
+    def set_items(self, items):
+        for child in self.menu.get_children():
+            self.menu.remove(child)
+        for i, it in enumerate(items):
+            label = it.get("label", "")
+            if label == "":
+                self.menu.append(Gtk.SeparatorMenuItem())
+                continue
+            if it.get("checked") is not None:
+                mi = Gtk.CheckMenuItem(label=label.replace("&", "_"), use_underline=True)
+                mi.set_active(bool(it["checked"]))
+            else:
+                mi = Gtk.MenuItem(label=label.replace("&", "_"), use_underline=True)
+            if it.get("default"):
+                child = mi.get_child()
+                if isinstance(child, Gtk.Label):
+                    child.set_markup("<b>" + GLib.markup_escape_text(child.get_text()) + "</b>")
+            mi.set_sensitive(it.get("enabled", True))
+            mi.connect("activate", lambda _m, i=i: emit({"event": "TrayItem", "index": i}))
+            self.menu.append(mi)
+        self.menu.show_all()
+
+
+tray = None
+
+
+def tray_op(req):
+    global tray
+    if tray is None:
+        tray = Tray()
+    if "icon" in req:
+        tray.set_icon(req["icon"])
+    if "tip" in req:
+        tray.set_tip(req["tip"])
+    if "items" in req:
+        tray.set_items(req["items"])
+    if "click_count" in req:
+        tray.click_count = int(req["click_count"])
+    if "visible" in req:
+        tray.set_visible(bool(req["visible"]))
+    return tray.kind
 
 
 def on_line(source, _cond):

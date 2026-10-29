@@ -54,6 +54,13 @@ bhk doctor                 # what BHK can use on this machine
   - MsgBox, InputBox, ToolTip, FileSelect and DirSelect.
   - `Gui()` with Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, Slider, Progress, GroupBox, Picture, Link and StatusBar.
   - AHK layout options and events, plus `Menu`.
+- **Tray icon, like AutoHotkey on Windows:**
+  - Every persistent script gets the pink tray icon, with the script name as its tooltip.
+  - The standard menu: **Open** (bold default, double-click), Help, Window Spy, Reload Script, Edit Script, Suspend Hotkeys and Pause Script (both with check marks), Exit.
+  - The icon changes while Suspended or Paused.
+  - `A_TrayMenu` is fully scriptable (Add, Insert, Delete, Rename, Check, Enable, Default, ClickCount, AddStandard).
+  - `A_IconTip`, `A_IconHidden`, `TraySetIcon` and `#NoTrayIcon` work.
+  - It uses XApp's StatusIcon, Cinnamon's tray library, on **Cinnamon, XFCE and MATE**. Other X11 trays get a plain XEmbed icon, and AppIndicator covers StatusNotifier-only panels (KDE, GNOME with the AppIndicator extension).
 - **Windows compatibility:**
   - `C:\Users\<you>\Desktop` and the other shell folders map to your real folders, `Z:\` is `/`, and other drives live in the prefix.
   - The registry is emulated.
@@ -62,6 +69,7 @@ bhk doctor                 # what BHK can use on this machine
 - **Proof:**
   - `python3 tests/run.py` runs the regression suite. Its expected outputs were checked against the AutoHotkey source.
   - AutoHotkey's own UX scripts load, and Window Spy runs with live data.
+  - 243 of 246 scripts from seven popular v2 repositories load (thqby/ahk2_lib, Descolada's libraries, UIA-v2 and OCR, jNizM's scripts, cJson, JXON). The other 3 include files that aren't in their repos. See `docs/COMPATIBILITY.md`, and reproduce with `tests/validate_corpus.sh`.
 
 ## Not supported
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
@@ -88,7 +96,8 @@ If you are an AI agent trying to use this project, these are the facts you need:
   - Built-ins: `bunnyhotkey/lib/*.py`, one `@export`ed Python function per AHK function.
   - Input: `hotkeys.py`, `hotmgr.py`, `backends/x11.py`.
 - **Adding a missing Win32 DllCall:** add a handler to the `EMU` table in `bunnyhotkey/lib/dllcall.py`.
-- **Tests:** `python3 tests/run.py`. To add one, add `tests/scripts/name.ahk` plus a `name.expected` file holding its exact stdout.
+- **Tests:** `python3 tests/run.py`. To add one, add `tests/scripts/name.ahk` plus a `name.expected` file holding its exact stdout. `tests/validate_corpus.sh` checks that real-world scripts load.
+- **Tray:** shown automatically for persistent scripts. Pass `--no-tray` (or use `#NoTrayIcon`) for background or headless runs. The menu logic is in `bunnyhotkey/lib/tray.py`.
 
 ## License
 GPL-2.0, the same as AutoHotkey, whose source BHK was derived from. The icon

@@ -688,6 +688,10 @@ class Parser:
             if self.is_op(":="):
                 self.next()
                 init = self.parse_expr(6)
+            elif self.peek().kind == "op" and self.peek().val in ASSIGN_OPS:
+                op_t = self.next()
+                rhs = self.parse_expr(6)
+                init = ("compound", A.Assign(op_t.val, A.Var(nt.val, **self.L(nt)), rhs, **self.L(op_t)))
             items.append((nt.val, init))
             if self.is_op(","):
                 self.next()
@@ -722,6 +726,9 @@ class Parser:
         return A.ClassDef(nt.val, extends, members, **self.L(t))
 
     def parse_class_member(self) -> list:
+        if self.peek().kind == "directive":
+            self.parse_directive()
+            return []
         is_static = False
         if self.is_word("static") and self.peek(1).kind == "id":
             self.next()
@@ -1023,12 +1030,18 @@ class Parser:
                     self.next()
                     continue
                 args.append(self.parse_expr(6))
+                variadic = False
+                if self.is_op("*") and self.is_op("]", 1):
+                    self.next()
+                    variadic = True
                 if self.is_op(","):
                     self.next()
                 elif not self.is_op("]"):
                     self.error('Missing "]"')
             self.next()
-            return A.Index(left, args, **loc)
+            node = A.Index(left, args, **loc)
+            node.variadic = locals().get("variadic", False)
+            return node
         if kind == "postfix":
             self.next()
             return A.IncDec(t.val, left, False, **loc)
@@ -1163,7 +1176,7 @@ class Parser:
                 return A.Unset(**loc)
             if w == "this":
                 self.next()
-                return A.This(**loc)
+                return A.Var("this", **loc)
             if w == "super":
                 self.next()
                 return A.Super(**loc)

@@ -318,4 +318,6 @@ def LoadPicture(*a):
 @export()
 def TraySetIcon(file="", number=UNSET, freeze=UNSET):
     rt().tray_icon = S(file)
+    from . import tray
+    tray.refresh()
     return ""

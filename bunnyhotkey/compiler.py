@@ -473,7 +473,7 @@ class Compiler:
 
     def e_Index(self, e, scope):
         rt = self.rt
-        args = self.compile_args(e.args, scope, False)
+        args = self.compile_args(e.args, scope, getattr(e, "variadic", False))
         if isinstance(e.obj, A.Member) and not isinstance(e.obj.obj, A.Super):
             # obj.prop[args] passes args to the property (AHK semantics)
             base = self.compile_expr(e.obj.obj, scope)
@@ -1443,6 +1443,9 @@ class Compiler:
         fns = []
         for name, init in s.items:
             if init is None:
+                continue
+            if isinstance(init, tuple) and init[0] == "compound":
+                fns.append(self.compile_expr(init[1], scope))
                 continue
             ev = self.compile_expr(init, scope)
             if s.kind == "static" and scope.kind == "func":
