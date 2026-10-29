@@ -1206,3 +1206,5 @@ EMU.update({
     "filetimetosystemtime": _filetime_to_systemtime, "closehandle": lambda p: 1,
     "shellexecute": _shell_execute,
 })
+
+from . import win32emu  # noqa: E402,F401  (registers more of the Win32 API into EMU)

@@ -189,6 +189,14 @@ def StrPut(string, target=UNSET, length=UNSET, encoding=UNSET):
     if target is UNSET:
         return len(raw) // unit if unit == 2 else len(raw)
     data, idx = resolve(target)
+    if isinstance(target, BufferObj):
+        # interop.cpp: a Buffer limits the length; text that only just fits goes in without its terminator
+        room = len(target.data) // unit
+        body = len(raw) // unit - 1
+        if body > room:
+            throw("ValueError", "Parameter #2 of StrPut is invalid.", "Buffer too small")
+        if (length is UNSET or length == "") and body + 1 > room:
+            raw = raw[:room * unit]
     if length is not UNSET and length != "":
         raw = raw[:O.RT.to_int(length) * unit]
     data[idx:idx + len(raw)] = raw

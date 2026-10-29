@@ -126,5 +126,9 @@
   "v1corpus": {
     "loaded": 318,
     "total": 327
+  },
+  "dllcall": {
+    "covered": 617,
+    "total": 8079
   }
 }
