@@ -389,24 +389,7 @@ def Shutdown(code):
     return ""
 
 
-@export()
-def ComObject(*a):
-    throw("Error", "COM objects are Windows-only and not available in Bunny Hot Key.", "ComObject")
 
-
-@export()
-def ComObjActive(*a):
-    throw("Error", "COM objects are Windows-only and not available in Bunny Hot Key.", "ComObjActive")
-
-
-@export()
-def ComObjGet(*a):
-    throw("Error", "COM objects are Windows-only and not available in Bunny Hot Key.", "ComObjGet")
-
-
-@export()
-def ComCall(*a):
-    throw("Error", "COM is Windows-only and not available in Bunny Hot Key.", "ComCall")
 
 
 def ver_compare(a: str, b: str) -> int:

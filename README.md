@@ -15,10 +15,10 @@
 
 <!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
-**97% of its built-in function API** is reproduced (333 full, 1 partial, 10 missing).
+**98% of its built-in function API** is reproduced (338 full, 1 partial, 5 missing).
 
 **Missing or left to do:**
-- **COM/ActiveX:** Windows-only (`ComObject`, the Gui ActiveX control, `SoundGetInterface`).
+- **COM beyond the common automation objects:** WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application and WMI are emulated; other COM servers (Office, UIAutomation, WebView2), `ComCall`/`ComObjQuery`/`ComObjFromPtr`/`ComObjActive` and the Gui ActiveX control need real Windows COM.
 - **Wayland input:** dropped for now.
 - **Other apps' controls:** read, typed into, clicked, checked and chosen through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.
 - **Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
@@ -86,7 +86,7 @@ bhk doctor                 # what BHK can use on this machine
   every loop type including `Loop … else`, `switch`, `goto`, continuation
   sections, `#Include <Lib>`, `#HotIf` and the other directives.
 - **Library:** all 362 entries in AutoHotkey's built-in function table exist.
-  COM functions raise a clear error, since COM is Windows-only.
+  COM works for the common automation objects (emulated, see below); raw COM calls raise a clear error.
   - `CallbackCreate` gives real native function pointers, so Linux libraries (e.g. libc's `qsort`) can call
     back into the script; `DllCall` also calls by address and `NumGet`/`StrGet` read native pointers.
   - `ObjPtr`/`ObjFromPtr`/`ObjAddRef`/`ObjRelease`, `StrPtr`, `OnMessage` with `SendMessage`/`PostMessage`,
@@ -132,7 +132,7 @@ bhk doctor                 # what BHK can use on this machine
 ## Not supported
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
 - **AutoHotkey v1 scripts:** BHK targets v2. A v1 `#Requires` gets a clear message.
-- **COM/ActiveX, and Windows-only APIs that aren't in the DllCall table.**
+- **Real Windows COM and Windows-only APIs that aren't in the DllCall table.** The common automation objects (`WinHttp.WinHttpRequest.5.1`, `MSXML2.XMLHTTP`, `Scripting.Dictionary`, `WScript.Shell`, `Scripting.FileSystemObject`, `ADODB.Stream`, `SAPI.SpVoice`, `Shell.Application`, WMI via `ComObjGet("winmgmts:")`) are emulated; other COM servers (Office, UIAutomation, WebView2) and `ComCall` need Windows.
 - **Moving or restyling other programs' controls:** other apps' widgets are read and operated through the accessibility bus (AT-SPI), which has no way to move, hide or restyle them. Apps that don't publish accessibility data (e.g. Qt without `QT_ACCESSIBILITY=1`) stay opaque.
 
 ## Note for agents

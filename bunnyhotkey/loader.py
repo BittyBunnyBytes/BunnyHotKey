@@ -218,6 +218,8 @@ class Program:
         rt.args_array = O.AhkArray(None, list(args))
         from .lib import guiobj
         guiobj.setup()
+        from .lib import com
+        com.setup_classes()
         self.loader = Loader(rt)
 
     def run(self) -> int:

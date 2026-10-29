@@ -149,5 +149,3 @@ def SysGetIPAddresses():
     return AhkArray(None, addrs)
 
 
-for _name in ("ComObjConnect", "ComObjFlags", "ComObjFromPtr", "ComObjQuery", "ComObjType", "ComObjValue"):
-    export(_name)((lambda n: lambda *a: throw("Error", "COM is Windows-only and not available in Bunny Hot Key.", n))(_name))

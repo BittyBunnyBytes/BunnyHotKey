@@ -16,11 +16,11 @@
     {"area": "All built-in functions", "measure": "builtins:all", "note": "{full} full, {partial} partial, {missing} missing"},
     {"area": "Gui", "percent": 95, "note": "21 of 23 control types (not ActiveX/Custom)"},
     {"area": "Win32 controls (Control*, Edit*)", "note": "own Gui + other apps via AT-SPI", "percent": 90},
-    {"area": "COM / ActiveX", "percent": 0, "note": "Windows-only"},
+    {"area": "COM / ActiveX", "percent": 45, "note": "common automation objects emulated"},
     {"area": "Wayland input", "percent": 0, "note": "dropped for now"}
   ],
   "missing": [
-    "**COM/ActiveX:** Windows-only (`ComObject`, the Gui ActiveX control, `SoundGetInterface`).",
+    "**COM beyond the common automation objects:** WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application and WMI are emulated; other COM servers (Office, UIAutomation, WebView2), `ComCall`/`ComObjQuery`/`ComObjFromPtr`/`ComObjActive` and the Gui ActiveX control need real Windows COM.",
     "**Wayland input:** dropped for now.",
     "**Other apps' controls:** read, typed into, clicked, checked and chosen through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.",
     "**Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.",

@@ -49,9 +49,9 @@
 <text x="685" y="329" font-size="11.5" fill="#59636e">SendLevel rules, bare modifiers, end keys</text>
 <text x="20" y="359" font-size="13" fill="#1f2328">All built-in functions</text>
 <rect x="300" y="347" width="330" height="16" rx="4" fill="#eef1f4"/>
-<rect x="300" y="347" width="320.1" height="16" rx="4" fill="#2da44e"/>
-<text x="640" y="359" font-size="13" font-weight="700" fill="#2da44e">97%</text>
-<text x="685" y="359" font-size="11.5" fill="#59636e">333 full, 1 partial, 10 missing</text>
+<rect x="300" y="347" width="323.4" height="16" rx="4" fill="#2da44e"/>
+<text x="640" y="359" font-size="13" font-weight="700" fill="#2da44e">98%</text>
+<text x="685" y="359" font-size="11.5" fill="#59636e">338 full, 1 partial, 5 missing</text>
 <text x="20" y="389" font-size="13" fill="#1f2328">Gui</text>
 <rect x="300" y="377" width="330" height="16" rx="4" fill="#eef1f4"/>
 <rect x="300" y="377" width="313.5" height="16" rx="4" fill="#2da44e"/>
@@ -64,8 +64,9 @@
 <text x="685" y="419" font-size="11.5" fill="#59636e">own Gui + other apps via AT-SPI</text>
 <text x="20" y="449" font-size="13" fill="#1f2328">COM / ActiveX</text>
 <rect x="300" y="437" width="330" height="16" rx="4" fill="#eef1f4"/>
-<text x="640" y="449" font-size="13" font-weight="700" fill="#cf222e">0%</text>
-<text x="685" y="449" font-size="11.5" fill="#59636e">Windows-only</text>
+<rect x="300" y="437" width="148.5" height="16" rx="4" fill="#cf222e"/>
+<text x="640" y="449" font-size="13" font-weight="700" fill="#cf222e">45%</text>
+<text x="685" y="449" font-size="11.5" fill="#59636e">common automation objects emulated</text>
 <text x="20" y="479" font-size="13" fill="#1f2328">Wayland input</text>
 <rect x="300" y="467" width="330" height="16" rx="4" fill="#eef1f4"/>
 <text x="640" y="479" font-size="13" font-weight="700" fill="#cf222e">0%</text>

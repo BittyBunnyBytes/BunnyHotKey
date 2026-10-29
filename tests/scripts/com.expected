@@ -1,0 +1,16 @@
+dict 3 10 2 -1 0 ComObject
+keys apple,Banana,cherry, 2
+dup 1
+textmode -1
+exec [hello from exec] status 1
+run 0 1
+env 1 %NOPE_X%
+fso -1 bhk_com_test.txt txt bhk_com_test 18
+read [line one] [line two] eof -1
+adodb 9 [héllo]
+deleted 0
+safearray 2 [a][][c] vt=0x200C
+comvalue 11 -1 dispatch 9 IDictionary
+wmi 1 1 os 1
+badclass 1
+comcall windows-only
