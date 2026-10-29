@@ -469,6 +469,11 @@ def callable_of(target, labels_first=True):
     return None
 
 
+@export("__v1_first")
+def _first(*vals):
+    return vals[0] if vals else ""
+
+
 @export("__v1_fn")
 def _fn(name):
     if isinstance(name, AhkObject):

@@ -4,7 +4,8 @@
    pass rate of its suite, and each built-in group's is the share of its functions (tools/ahk_builtins.txt)
    that a passing run test calls - a passing conformance section or a regression script (tests/scripts).
    Desktop suites drive the real X11 session (synthetic input, test windows, the tray).
-   Also measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, and tests/v1 loading.
+   Also measures the v1 frontend: tools/ahk_v1_commands.txt vs bunnyhotkey/legacy.py, tests/v1 loading, and
+   the public v1 script corpus (tools/v1_corpus.py; loaded and compiled, not run).
 2. Reads docs/parity.json (areas, notes, the "missing" list).
 3. Writes assets/parity.svg and refreshes the generated blocks in README.md and docs/PARITY.md
    (between <!-- parity:...:start --> and <!-- parity:...:end --> markers).
@@ -148,6 +149,16 @@ def measure(spec, cls, data):
 
 
 def measure_v1(what):
+    if what == "corpus":
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import v1_corpus
+        r = v1_corpus.measure(v1_corpus.corpus_dir())          # re-measured when the corpus is present
+        if r is not None:
+            loaded, total = r[0], r[1]
+        else:
+            c = json.load(open(os.path.join(ROOT, "docs", "parity.json"), encoding="utf-8")).get("v1corpus", {})
+            loaded, total = c.get("loaded", 0), c.get("total", 0)
+        return (round(100 * loaded / total) if total else 0), {"loaded": loaded, "total": total}
     if what in ("language", "gui", "hotkeys"):
         return measure("suite:v1_" + what, None, None)
     if what == "scripts":

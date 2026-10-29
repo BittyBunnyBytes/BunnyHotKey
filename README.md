@@ -15,7 +15,7 @@
 
 <!-- parity:summary:start -->
 **In short:** every percentage is a pass rate of run tests (`tests/conformance`, real scripts compared with AutoHotkey's documented results). The v2 *language* suite passes 100%, and **332 of 344 built-in functions (97%)** are called by a passing run test.
-**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - hotkey syntax & #If directives 100%, commands 100%, language 100%, Gui 100%; see [docs/V1.md](docs/V1.md).
+**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - Public scripts that load 97%, hotkey syntax & #If directives 100%, commands 100%, language 100%, Gui 100%; see [docs/V1.md](docs/V1.md).
 
 **Missing or left to do:**
 - **Windows COM servers:** objects are real native COM (ComCall, ComObjQuery, ComObjFromPtr, IDispatch both ways, a running-object table shared by BHK scripts), and WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application, WMI and the web browser are emulated; servers that only exist as Windows binaries (Office, UIAutomation, WebView2) aren't available.

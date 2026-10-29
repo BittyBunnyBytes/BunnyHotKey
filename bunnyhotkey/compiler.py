@@ -67,7 +67,8 @@ class Compiler:
         compiled = []
         for fd in funcs:
             key = fd.name.lower()
-            if key in rt.consts:
+            if key in rt.consts and not (self.v1 and key in self.builtin_consts):
+                # (v1: a user function may take the name of a built-in such as Array(), which it overrides)
                 raise AhkSyntaxError("Duplicate function definition.", fd.file, fd.line, fd.name)
             cf = CompiledFunc(rt, fd.name)
             if self.v1:

@@ -145,6 +145,9 @@ V1_DIRECTIVES = {
     'menumaskkey', 'noenv', 'notrayicon', 'persistent', 'requires', 'singleinstance', 'usehook', 'warn',
     'winactivateforce', 'dllload', 'hotif', 'hotiftimeout', 'suspendexempt'}
 
+# v2 keywords that v1 scripts use as variable names; operator words (and, or, not, in...) are left alone
+V1_RENAMED = {'switch', 'unset'}     # (until/throw/try... start statements, so they stay)
+
 TIME_UNITS = {'seconds', 'second', 's', 'minutes', 'minute', 'm', 'hours', 'hour', 'h', 'days', 'day', 'd'}
 
 LEGACY_IF_OPS = ('<>', '!=', '>=', '<=', '=', '>', '<')
@@ -224,6 +227,10 @@ def logical_lines(text, filename, ltrim_default=False):
                 if not (s.endswith('*/') and len(s) >= 4):
                     in_comment = True
                 continue
+            if s.startswith('*/') and not s.startswith('*/::'):
+                s = s[2:].strip()                   # v1.1 ignores an orphan comment-end (script.cpp, v2 note)
+                if not s:
+                    continue
             if flag == ';' and s.startswith(';'):
                 continue
             s = _strip_comment(s, flag)
@@ -253,7 +260,7 @@ def logical_lines(text, filename, ltrim_default=False):
                 elif opt == '%':
                     lit_pct = True
                 elif opt == ',':
-                    lit_comma = True
+                    pass            # commas as delimiters; BHK's last command parameter absorbs them anyway
                 elif opt == ESC:
                     lit_esc = True
             j = k
@@ -475,9 +482,60 @@ class Expr:
             return VARS[low]
         if low.isdigit():
             return f'__v1_arg({low})'
+        if low in V1_RENAMED:
+            return '__v1v_' + v                 # a v1 variable named like a v2 keyword (Switch := ...)
         return self.name(v, True)
 
+    def complete(self, toks, i, end):
+        """v1 tolerates a ternary without its ':' branch, or with an empty one (x ? y, x ? y :): both
+        yield "" for the missing branch.  Also obj.M(args) := v, v1's call syntax for obj.M[args] := v."""
+        seg = toks[i:end]
+        out, depth, q, changed = [], 0, 0, False
+        for n, t in enumerate(seg):
+            if t.k == 'op' and t.v in ('(', '[', '{'):
+                depth += 1
+            elif t.k == 'op' and t.v in (')', ']', '}'):
+                depth -= 1
+            elif depth == 0 and t.k == 'op' and t.v == '?':
+                q += 1
+            elif depth == 0 and t.k == 'op' and t.v == ':':
+                q -= 1
+                rest = [x for x in seg[n + 1:] if x.k != 'ws']
+                if not rest or (rest[0].k == 'op' and rest[0].v == ','):
+                    out.append(t)
+                    out.append(Tok('str', '""'))
+                    changed = True
+                    continue
+            elif depth == 0 and t.k == 'op' and t.v == ',' and q > 0:
+                out.extend([Tok('ws', ' '), Tok('op', ':'), Tok('ws', ' '), Tok('str', '""')] * q)
+                q, changed = 0, True
+            elif depth == 0 and t.k == 'op' and t.v == ':=' and out:
+                # obj.M(args) := v  ->  obj.M[args] := v
+                j = len(out) - 1
+                while j >= 0 and out[j].k == 'ws':
+                    j -= 1
+                if j >= 2 and out[j].v == ')':
+                    d, k = 0, j
+                    while k >= 0:
+                        d += out[k].v == ')'
+                        d -= out[k].v == '('
+                        if d == 0:
+                            break
+                        k -= 1
+                    if k > 1 and out[k - 1].k == 'name' and out[k - 2].v == '.':
+                        out[k] = Tok('op', '[')
+                        out[j] = Tok('op', ']')
+                        changed = True
+            out.append(t)
+        if q > 0:
+            out.extend([Tok('ws', ' '), Tok('op', ':'), Tok('ws', ' '), Tok('str', '""')] * q)
+            changed = True
+        return out if changed else None
+
     def render(self, toks, i, end):
+        fixed = self.complete(toks, i, end)
+        if fixed is not None:
+            return self.render(fixed, 0, len(fixed))
         out = []
         while i < end:
             t = toks[i]
@@ -488,6 +546,8 @@ class Expr:
                 continue
             if k == 'str':
                 body = v[1:-1].replace('""', ESC + '"').replace('\n', '`n')
+                if i > 0 and (toks[i - 1].k in ('str', 'num', 'name') or toks[i - 1].v == ')'):
+                    out.append(' ')                 # v1 concatenates adjacent operands without a space
                 out.append('"' + body + '"')
                 i += 1
                 continue
@@ -504,6 +564,8 @@ class Expr:
             if k == 'name':
                 p = self.prev(toks, i)
                 low = v.lower()
+                if i > 0 and toks[i - 1].k == 'str':
+                    out.append(' ')
                 j = self.nxt(toks, i, end)
                 after = toks[j] if j < end else None
                 member = p is not None and p.k == 'op' and p.v == '.' and not (i > 0 and toks[i - 1].k == 'ws')
@@ -558,9 +620,21 @@ class Expr:
                 out.append('!=')
                 i += 1
                 continue
+            if v == '.' and i + 1 < end and toks[i + 1].k == 'ws' and i > 0 and toks[i - 1].k != 'ws':
+                out.append(' .')                    # x). (y: a dot followed by a space concatenates in v1
+                i += 1
+                continue
             if v == '.' and i + 1 < end and toks[i + 1].v == '(':
                 out.append('.Call')
                 i += 1
+                continue
+            pv = self.prev(toks, i)
+            if v in ('++', '--') and pv is not None and pv.k in ('str', 'num') and i + 1 < end and toks[i + 1].k == 'name':
+                j = i + 1                               # "str" ++x: a literal can't be incremented, so ++ is a prefix
+                while j + 2 < end and toks[j + 1].v == '.' and toks[j + 2].k == 'name':
+                    j += 2
+                out.append(' (' + v + self.render(toks, i + 1, j + 1) + ')')
+                i = j + 1
                 continue
             if v in ('++', '--') and _operand_end(self.prev(toks, i)) and self.prev(toks, i).v not in ('++', '--'):
                 while out and out[-1].strip() == '':
@@ -585,6 +659,11 @@ class Expr:
                 out.append('__v1_Array(' + self.args(toks, i + 1, close, ()) + ')')
                 i = close + 1
                 continue
+            if v == '(' and not _operand_end(self.prev(toks, i)) and self.nxt(toks, i, end) < end \
+                    and toks[self.nxt(toks, i, end)].v == ')':
+                out.append('("")')                  # () as a value: v1 yields an empty string
+                i = self.nxt(toks, i, end) + 1
+                continue
             if v in ('(', '['):
                 close = self.match(toks, i, end)
                 out.append(v + self.render(toks, i + 1, close) + toks[close].v)
@@ -601,6 +680,11 @@ class Expr:
                 if j < end and toks[j].k in ('name', 'num'):
                     out.append('__v1_deref(' + self.name(toks[j].v) + ')')
                     i = j + 1
+                    continue
+                if j < end and toks[j].v == '(':
+                    close = self.match(toks, j, end)
+                    out.append('__v1_deref(' + self.render(toks, j + 1, close) + ')')
+                    i = close + 1
                     continue
             if v == '%':
                 # %expr% double deref whose inner part has spaces or operators
@@ -936,6 +1020,10 @@ class Translator:
             self.emit('{')
             self.open_block()
             return
+        if t.startswith('{') and not t.startswith('{}'):
+            self.emit('{')                              # "{ statement" opens a block and runs the statement
+            self.open_block()
+            return self.do_line(t[1:].strip())
         hot = classify_hot_line(t.replace('`;', ';', 1) if t.startswith('`;') else t)
         if hot and not self.stack:
             return self.hot(hot, t)
@@ -1123,6 +1211,11 @@ class Translator:
 
         # function definitions
         if top and self.top or 'class' in self.stack and not self.in_method:
+            m2 = re.match(r'(' + NAME + r'+)\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*\{\s*(\S.*)$', t)
+            if m2 and w not in ('if', 'while', 'for', 'loop', 'switch', 'catch', 'return') and not self.stack \
+                    and m2[3].strip() != '}':
+                self.statement(t[:t.index('{', m2.end(2))].rstrip() + ' {', top)    # Func() { first statement
+                return self.do_line(m2[3].strip())
             m = re.match(r'(' + NAME + r'+)\((.*)\)\s*(\{)?$', t)
             if m and w not in ('if', 'while', 'for', 'loop', 'switch', 'catch', 'return') and \
                     (m[3] or self.next_text.startswith('{')) and not self.stack:
@@ -1152,6 +1245,8 @@ class Translator:
             return self.emit(self.expr(t))
         if t.startswith(('++', '--', '(')):
             return self.emit(self.expr(t))
+        if t.startswith('% '):
+            return self.emit(self.expr(t[2:]))       # a line forced to be an expression
         m = re.match(r'((?:' + NAME + r'|%[^%]+%)+)\s*=(?!=)(.*)$', t, re.S)
         if m and w not in COMMANDS and w not in ('if', 'while', 'return', 'loop', 'until'):
             return self.emit(self.expr.name(m[1]) + ' := ' + self.literal(m[2]))
@@ -1168,6 +1263,10 @@ class Translator:
             if r == '{':
                 self.emit('else {')
                 return self.open_block()
+            if r.startswith('{'):                     # else { statement
+                self.emit('else {')
+                self.open_block()
+                return self.do_line(r[1:].strip())
             if not r:
                 return self.emit('else')
             self.emit('else')
@@ -1182,13 +1281,17 @@ class Translator:
             return
         if w == 'until':
             return self.emit('until ' + self.paren(self.expr(rest)))
-        if w == 'for' and re.match(r'for\s', t, re.I):
-            body, brace = self.otb(t[3:].strip())
+        if w == 'for' and re.match(r'for[\s,]', t, re.I):
+            body, brace = self.otb(t[3:].strip().lstrip(',').strip())
             m = re.match(r'(.*?)\s+in\s+(.*)$', body, re.I | re.S)
             if not m:
                 self.err('Invalid For loop.', t)
+            seq = self.expr(m[2])
+            if len(self.params_split(m[2])) > 1:
+                # "in X, Y": evaluate all, iterate the first (scripts write For k, v in arr, init := x)
+                seq = '__v1_first(' + seq + ')'
             self.emit('for ' + ', '.join(self.expr.name(v.strip(), True) for v in m[1].split(',')) + ' in ' +
-                      self.expr(m[2]) + brace)
+                      seq + brace)
             if brace:
                 self.open_block()
             return
@@ -1200,7 +1303,7 @@ class Translator:
             self.emit('try')
             return self.statement(r) if r else None
         if w == 'catch':
-            r = t[5:].strip()
+            r = t[5:].strip().lstrip(',').strip()          # v1 accepts "Catch, Var"
             brace = ''
             if r.endswith('{'):
                 r, brace = r[:-1].strip(), ' {'
@@ -1244,6 +1347,8 @@ class Translator:
             r = rest.strip()
             if re.fullmatch(r'%(' + NAME + r'+)%', r):
                 r = r[1:-1]
+            elif r.startswith('% '):
+                r = r[2:]                            # return % expression
             return self.emit('return' + (' ' + self.expr(r) if r else ''))
         if w in ('break', 'continue'):
             return self.emit(w + (' ' + self.label_name(rest.strip()) if rest.strip() and not rest.strip().isdigit()
@@ -1309,6 +1414,9 @@ class Translator:
         t = t.strip()
         if t.startswith(','):
             t = t[1:].strip()
+        if t.startswith('% '):                        # If % expression
+            body = t[2:].strip()
+            t = '(' + body[:-1].strip() + ') {' if body.endswith('{') else '(' + body + ')'
         # expression if
         if t.startswith('('):
             try:
@@ -1394,12 +1502,19 @@ class Translator:
                                                                          'gosub', 'else'))
 
     def same_line(self, args, n):
-        """v1 allows a command on the same line after the parameters of IfEqual & co."""
+        """v1 allows a command on the same line after the parameters of IfEqual & co. (or an OTB brace)."""
         if len(args) > n and args[n].strip():
-            self.statement(args[n].strip())
+            r = args[n].strip()
+            if r.startswith('{'):
+                self.emit('{')
+                self.open_block()
+                if r[1:].strip():
+                    self.do_line(r[1:].strip())
+                return
+            self.statement(r)
 
     def loop_stmt(self, t):
-        body, brace = self.otb(t[4:].strip())
+        body, brace = self.otb(t[4:].strip(), attached=t[4:].strip().startswith('%'))
         if body.startswith(','):
             body = body[1:].strip()
         if not body:

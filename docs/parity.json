@@ -97,6 +97,11 @@
         "note": "{loaded} of {total} hotkey scripts (game macros)"
       },
       {
+        "area": "Public v1 scripts that load",
+        "measure": "v1:corpus",
+        "note": "{loaded} of {total} from 11 repos (V1_CORPUS.md)"
+      },
+      {
         "area": "v1 hotkey syntax & #If directives",
         "note": "{passed} of {count} checks with real X11 input",
         "measure": "v1:hotkeys"
@@ -117,5 +122,9 @@
         "measure": "v1:gui"
       }
     ]
+  },
+  "v1corpus": {
+    "loaded": 318,
+    "total": 327
   }
 }

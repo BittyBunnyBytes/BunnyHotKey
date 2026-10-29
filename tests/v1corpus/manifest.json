@@ -1,0 +1,1310 @@
+[
+ {
+  "file": "GorvGoyl_Autohotkey-Scripts-Windows__fix_win_backspace.ahk",
+  "source": "https://github.com/GorvGoyl/Autohotkey-Scripts-Windows : drafts/fix_win_backspace.ahk"
+ },
+ {
+  "file": "camerb_AHKs__RandomUniqNum.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/RandomUniqNum.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__Games.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : AppSpecific/Games.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__SQLServer.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : AppSpecific/SQLServer.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__VirtualDesktops.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : Shortcuts/VirtualDesktops.ahk"
+ },
+ {
+  "file": "tdalon_ahk__BitBucket.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/BitBucket.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Promise.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : AHK_V2/Promise.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Strings.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : AHK_V2/Strings.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Tokens.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : AHK_V2/Tokens.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Class_Console_Demo_3_STDout.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/Class_Console_Demo_3_STDout.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_BTT-example_1.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_BTT-example 1.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_TreeOf.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_TreeOf.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_dual_defaults.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_dual_defaults.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_indirectReference.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_indirectReference.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Const_TTSConstants.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : constants/Const_TTSConstants.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ElapsedTime.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ElapsedTime.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__case-string.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/case-string.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__eol-convert.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/eol-convert.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__eol.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/eol.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetDurationFromMilliseconds.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetDurationFromMilliseconds.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__getKey.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/getKey.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__getSystemLanguage.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/getSystemLanguage.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__isURL.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/isURL.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__PBhashtype.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/PBhashtype.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__PBtimeserver.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/PBtimeserver.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomUniqNum.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomUniqNum.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RegExByte.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RegExByte.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__SendMessageList-Script.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/SendMessageList-Script.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__WaitForEvent.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/WaitForEvent.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Subtitle_class_example.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/examples/Subtitle_class_example.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__WIA_SAMPLE.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/examples/WIA/WIA_SAMPLE.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__releaseKeyspSend.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/releaseKeyspSend.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__actions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : more libs/Various1/lib/modules/pager/actions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__gui_extra_dirs.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : more libs/Win32-API-Const_AHK_V2/inc/gui_extra_dirs.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__WSOConsts.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : more libs/WindowsScriptingObject/WSOConsts.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__bases.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : more libs/xlib/xinclude/common/bases.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Copy_from_one_sheet_to_another.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : msOffice/Excel/Copy_from_one_sheet_to_another.ahk"
+ },
+ {
+  "file": "Drugoy_Autohotkey-scripts-.ahk__ArrayOfArrays_2D_Array_.ahk",
+  "source": "https://github.com/Drugoy/Autohotkey-scripts-.ahk : DevTools/ArrayOfArrays (2D Array).ahk"
+ },
+ {
+  "file": "Drugoy_Autohotkey-scripts-.ahk__Get_a_list_of_HWNDs_of_all_the_windows_related_to_program.exe.ahk",
+  "source": "https://github.com/Drugoy/Autohotkey-scripts-.ahk : DevTools/Get a list of HWNDs of all the windows related to program.exe.ahk"
+ },
+ {
+  "file": "Drugoy_Autohotkey-scripts-.ahk__GetKeyState_tooltip.ahk",
+  "source": "https://github.com/Drugoy/Autohotkey-scripts-.ahk : DevTools/GetKeyState tooltip.ahk"
+ },
+ {
+  "file": "Drugoy_Autohotkey-scripts-.ahk__calc.ahk",
+  "source": "https://github.com/Drugoy/Autohotkey-scripts-.ahk : DevTools/SmartGUI Creator/calc.ahk"
+ },
+ {
+  "file": "Drugoy_Autohotkey-scripts-.ahk__showPerWindowInfoOfAllWindows.ahk",
+  "source": "https://github.com/Drugoy/Autohotkey-scripts-.ahk : DevTools/showPerWindowInfoOfAllWindows.ahk"
+ },
+ {
+  "file": "GorvGoyl_Autohotkey-Scripts-Windows__eval.ahk",
+  "source": "https://github.com/GorvGoyl/Autohotkey-Scripts-Windows : in-line-calculator/lib/eval.ahk"
+ },
+ {
+  "file": "Paris_AutoHotkey-Scripts__DateParse.ahk",
+  "source": "https://github.com/Paris/AutoHotkey-Scripts : DateParse.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__Arguments.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Lib/Arguments.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__JSON_Beautify.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Lib/JSON_Beautify.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__JSON_FromObj.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Lib/JSON_FromObj.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__JSON_ToObj.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Lib/JSON_ToObj.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__example_4.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Test_Packages/AHKsock/example_4.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__anchor-example.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Test_Packages/anchor/anchor-example.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__Gdip.Tutorial.1-Draw.Shapes.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Test_Packages/gdip/Gdip.Tutorial.1-Draw.Shapes.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__Gdip.Tutorial.9-Create.a.progress.bar.on.standard.gui.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Test_Packages/gdip/Gdip.Tutorial.9-Create.a.progress.bar.on.standard.gui.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__Alphasort_Test.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Tests/Alphasort_Test.ahk"
+ },
+ {
+  "file": "ahkscript_ASPDM__Validate_Test.ahk",
+  "source": "https://github.com/ahkscript/ASPDM : Local-Client/Tests/Validate_Test.ahk"
+ },
+ {
+  "file": "aviaryan_autohotkey-scripts__DayofDate.ahk",
+  "source": "https://github.com/aviaryan/autohotkey-scripts : Functions/DayofDate.ahk"
+ },
+ {
+  "file": "aviaryan_autohotkey-scripts__ValueOf.ahk",
+  "source": "https://github.com/aviaryan/autohotkey-scripts : Functions/ValueOf.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Lagos.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/AHKArena/player_Lagos.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_LiquidGravityD.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/AHKArena/player_LiquidGravityD.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Morpha.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/AHKArena/player_Morpha.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_aggromorph.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/AHKArena/player_aggromorph.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Morpha_2.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/AHKArena/vectors/player_Morpha.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Scud.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/AHKArena/vectors/player_Scud.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Lagos_2.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/Revertion Archive/AHKArena/2010-08-11_12-48-47 merged in single GUI window/Revertion Archive/AHKArena/2010-08-10_16-07-19 new version 1.4 - broken/player_Lagos.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Morpha_3.ahk",
+  "source": "https://github.com/camerb/AHKs : AHKArena/Revertion Archive/AHKArena/2010-08-11_12-48-47 merged in single GUI window/Revertion Archive/AHKArena/2010-08-10_16-07-19 new version 1.4 - broken/player_Morpha.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Lagos_3.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/AhkArena/player_Lagos.ahk"
+ },
+ {
+  "file": "camerb_AHKs__player_Morpha_4.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/AhkArena/player_Morpha.ahk"
+ },
+ {
+  "file": "camerb_AHKs__CdoComEmail.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/CdoComEmail.ahk"
+ },
+ {
+  "file": "camerb_AHKs__Cycle.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/Cycle.ahk"
+ },
+ {
+  "file": "camerb_AHKs__DamerauLevenshteinDistance.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/DamerauLevenshteinDistance.ahk"
+ },
+ {
+  "file": "camerb_AHKs__DateParse.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/DateParse.ahk"
+ },
+ {
+  "file": "camerb_AHKs__Format4Csv.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/Format4Csv.ahk"
+ },
+ {
+  "file": "camerb_AHKs__GetAvailableFileName.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/GetAvailableFileName.ahk"
+ },
+ {
+  "file": "camerb_AHKs__GetIEWindowInfo.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/GetIEWindowInfo.ahk"
+ },
+ {
+  "file": "camerb_AHKs__grep.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/TitanMetaxalRecorder/grep.ahk"
+ },
+ {
+  "file": "camerb_AHKs__baseConvert.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/baseConvert.ahk"
+ },
+ {
+  "file": "camerb_AHKs__cdomessage.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/cdomessage.ahk"
+ },
+ {
+  "file": "camerb_AHKs__infogulchEncodings.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/infogulchEncodings.ahk"
+ },
+ {
+  "file": "camerb_AHKs__json.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/json.ahk"
+ },
+ {
+  "file": "camerb_AHKs__CDialogs.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/lib/CDialogs.ahk"
+ },
+ {
+  "file": "camerb_AHKs__Regex.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/lib/Regex.ahk"
+ },
+ {
+  "file": "camerb_AHKs__rand.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/rand.ahk"
+ },
+ {
+  "file": "camerb_AHKs__nm.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/setupbuilder/setupbuilder/extras/nm.ahk"
+ },
+ {
+  "file": "camerb_AHKs__st.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/st.ahk"
+ },
+ {
+  "file": "camerb_AHKs__strTail.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/strTail.ahk"
+ },
+ {
+  "file": "camerb_AHKs__grep_2.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/titan/grep.ahk"
+ },
+ {
+  "file": "camerb_AHKs__uuid.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/titan/uuid.ahk"
+ },
+ {
+  "file": "camerb_AHKs__uuid_2.ahk",
+  "source": "https://github.com/camerb/AHKs : thirdParty/uuid.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__GoogleChrome.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : AppSpecific/GoogleChrome.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__VSCode.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : AppSpecific/VSCode.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__DirectoryCompare.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : Utilities/DirectoryCompare.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__Array.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : lib/Array.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__String.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : lib/String.ahk"
+ },
+ {
+  "file": "denolfe_AutoHotkey__json.ahk",
+  "source": "https://github.com/denolfe/AutoHotkey : lib/json.ahk"
+ },
+ {
+  "file": "jNizM_AHK_Scripts__RevArr.ahk",
+  "source": "https://github.com/jNizM/AHK_Scripts : src/arrays/RevArr.ahk"
+ },
+ {
+  "file": "jNizM_AHK_Scripts__GUI_Draw_Line.ahk",
+  "source": "https://github.com/jNizM/AHK_Scripts : src/gui/GUI_Draw_Line.ahk"
+ },
+ {
+  "file": "jNizM_AHK_Scripts__Adler32.ahk",
+  "source": "https://github.com/jNizM/AHK_Scripts : src/hash_checksum/Adler32.ahk"
+ },
+ {
+  "file": "tariqporter_Gdip__Gdip.Tutorial.2-Draw.Outlined.Shapes.ahk",
+  "source": "https://github.com/tariqporter/Gdip : Gdip.Tutorial.2-Draw.Outlined.Shapes.ahk"
+ },
+ {
+  "file": "tariqporter_Gdip__Gdip.Tutorial.5-Create.Bitmap.ahk",
+  "source": "https://github.com/tariqporter/Gdip : Gdip.Tutorial.5-Create.Bitmap.ahk"
+ },
+ {
+  "file": "tdalon_ahk__ButtonBox.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/ButtonBox.ahk"
+ },
+ {
+  "file": "tdalon_ahk__DateParse.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/DateParse.ahk"
+ },
+ {
+  "file": "tdalon_ahk__Group.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/Group.ahk"
+ },
+ {
+  "file": "tdalon_ahk__MultiLineInputBox.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/MultiLineInputBox.ahk"
+ },
+ {
+  "file": "tdalon_ahk__ShowTooltip.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/ShowTooltip.ahk"
+ },
+ {
+  "file": "tdalon_ahk__Tooltip.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/Tooltip.ahk"
+ },
+ {
+  "file": "tdalon_ahk__TrayIcon.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/TrayIcon.ahk"
+ },
+ {
+  "file": "tdalon_ahk__uriEncode.ahk",
+  "source": "https://github.com/tdalon/ahk : Lib/uriEncode.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__JSON_AHk_Parsing_for_ahk2.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : AHK_V2/JSON_AHk_Parsing_for_ahk2.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__WinHttpRequest.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : AHK_V2/WinHttpRequest.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__XML.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : AHK_V2/XML.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Class_DateTools.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/Class_DateTools.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Class_Trie.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/Class_Trie.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ComDispTable.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/ComDispTable.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DataBaseAbstract.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/DataBaseAbstract.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DataBaseFactory.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/DataBaseFactory.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Class_Serial_example.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/Class_Serial_example.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__sizeof.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/cGitHub_Class/lib/sizeof.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_BTT--example_2.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_BTT--example 2.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_BTT--example_3.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_BTT--example 3.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_BTT--example_4.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_BTT--example 4.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_BTT--example_5.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_BTT--example 5.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_JSONFile_example.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_JSONFile_example.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Rebar_Mult.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_Rebar_Mult.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__file_upload_with_progressbar.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_WinSCP-Examples/file_upload_with_progressbar.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__tester.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/_examples/class_array_quicksort/tester/tester.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_countdown_msgbox.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class countdown_msgbox.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_AHSock_RemoteObj.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_AHSock_RemoteObj.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Array.Prototype.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Array.Prototype.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_BinaryHeap.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_BinaryHeap.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_CDataBase.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_CDataBase.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_CDialogs.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_CDialogs.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_CaseSensitiveObject.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_CaseSensitiveObject.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Classifier.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Classifier.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_ColorTip.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_ColorTip.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_DoublyLinkedList.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_DoublyLinkedList.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_ExtObj.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_ExtObj.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_GroupSort.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_GroupSort.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_GuiVar.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_GuiVar.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_InputDlg.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_InputDlg.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_IntShortening.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_IntShortening.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Joystick.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Joystick.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Linear.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Linear.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Matrix.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Matrix.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_MultiTree_Data_Structure.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_MultiTree Data Structure.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_MyTextAnalysisTool.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_MyTextAnalysisTool.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_OGdip-Geometry.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_OGdip-Geometry.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_OpenLocatorCode.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_OpenLocatorCode.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Range.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Range.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Regex_2_.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Regex (2).ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_Regex.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_Regex.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_SpellCorrect.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_SpellCorrect.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_StringHelper.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_StringHelper.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_array_base.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_array_base.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_getOpts.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_getOpts.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_iexplorerClass.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_iexplorerClass.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_midday.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_midday.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_ngram.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_ngram.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_progress_slider.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_progress_slider.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_tableList_2_.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_tableList (2).ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__class_tableList.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/class_tableList.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__clsss_Array.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : classes/clsss_Array.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AHKA.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/AHKA.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ASCII85_unicode.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ASCII85_unicode.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AddCommas.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/AddCommas.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AhkDllFunctions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/AhkDllFunctions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AlphaSortEx.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/AlphaSortEx.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Array_Extensions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Array Extensions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Array.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Array.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Array_B.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Array_B.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Array_data.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Array_data.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AutoXYWH.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/AutoXYWH.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AveragingFunctions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/AveragingFunctions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__BARCODER.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/BARCODER.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__BalancingWords.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/BalancingWords.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__BinomialCoefficient.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/BinomialCoefficient.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__CMsgbox.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/CMsgbox.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__CMsgboxE.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/CMsgboxE.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__COMo.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/COMo.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__CRC32_SKAN.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/CRC32_SKAN.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__CalculateDistance.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/CalculateDistance.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ChangeCase.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ChangeCase.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ColorRange.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ColorRange.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__CompareFileNameArray.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/CompareFileNameArray.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ConvertToCamelCase.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ConvertToCamelCase.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ConvertToLoserCase.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ConvertToLoserCase.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ConvertToPascalCase.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/ConvertToPascalCase.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Correlation_Coefficient.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Correlation Coefficient.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__CtrlCoOrder.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/CtrlCoOrder.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Cycle.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Cycle.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DDLManager.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DDLManager.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DamerauLevenshteinDistance.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DamerauLevenshteinDistance.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DateAdd.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DateAdd.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DateDiff.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DateDiff.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DateParse.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DateParse.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Decimal2Fraction.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Decimal2Fraction.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Deref_Umlauts.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Deref_Umlauts.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Difference.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Difference.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DriveGetLabels.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DriveGetLabels.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DriveGetObj.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DriveGetObj.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__DuplicateFinderAndCounter.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/DuplicateFinderAndCounter.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__EncodeHTML.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/EncodeHTML.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Entropy.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Entropy.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Equilibrium_index.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Equilibrium_index.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Eval.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Eval.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__EventIsDue.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/EventIsDue.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FileQ.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/FileQ.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FixURI.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/FixURI.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FloatToFraction.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/FloatToFraction.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Format4Csv.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/Format4Csv.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FormatBytesEx.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/FormatBytesEx.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FormatNumberCommas.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/FormatNumberCommas.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FuncAutokeyWord.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/FuncAutokeyWord.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__addDays.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/addDays.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__array_.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/array_.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__benfords-law.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/benfords-law.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__bitrotate.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/bitrotate.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__bytes.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/bytes.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__capitalizeString.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/capitalizeString.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__cdomessage.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/cdomessage.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__cleanClipboard.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/cleanClipboard.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__commaFormat.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/commaFormat.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__crypt.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/crypt.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__dates.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/dates.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__enforced-immutability.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/enforced-immutability.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__example_4.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/examples/AHKSock/example_4.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__AddClearBtnToEdit_Sample.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/examples/AddClearBtnToEdit_Sample.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__FGP_Example.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/examples/FGP_Example.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__fileGetVersionInfo_demo.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/examples/fileGetVersionInfo_demo.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__formatTickCount.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/a-f/formatTickCount.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GUIUniqueDefault_.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GUIUniqueDefault().ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Gdip_draw_n_Gui.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Gdip_draw_n_Gui.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetAvailableFileName.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetAvailableFileName.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetColumnList.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetColumnList.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetConnectionString.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetConnectionString.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetControlsInfo.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetControlsInfo.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetDriveLetter.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetDriveLetter.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetEnvironmentVariables.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetEnvironmentVariables.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetFileFolderSize.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetFileFolderSize.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetFreeDriveSpace.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetFreeDriveSpace.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetJScript.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetJScript.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetNestedTag.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetNestedTag.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetTimeDifference.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetTimeDifference.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetTuples.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetTuples.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GetWeekDay_TwoLang.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GetWeekDay_TwoLang.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Get_TextCtrlSize.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Get_TextCtrlSize.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GitHubAPI.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GitHubAPI.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GroupBox.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GroupBox.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GuiCtl.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GuiCtl.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GuiLayout.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GuiLayout.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GuiSettings.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GuiSettings.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GuiVar.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/GuiVar.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__HTML_Util.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/HTML_Util.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__HTTP_Login.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/HTTP_Login.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__HideInfotipOnMouseOver.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/HideInfotipOnMouseOver.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__HtmlBox.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/HtmlBox.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__IPToInt_.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/IPToInt().ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ISBN.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/ISBN.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__InsertionSort.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/InsertionSort.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Inverse_FormatTime.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Inverse_FormatTime.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__IsFilePathTooLong.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/IsFilePathTooLong.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__IsValidFileName.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/IsValidFileName.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__JEE_DateAdd.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/JEE_DateAdd.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__JEE_ExplorerWinGetText.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/JEE_ExplorerWinGetText.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__JSON_Beautify.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/JSON_Beautify.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__JSON_FromObj.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/JSON_FromObj.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__LV.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/LV.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__LV_G.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/LV_G.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__LetterVariations.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/LetterVariations.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__List-Functions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/List-Functions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ListCompare.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/ListCompare.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Lower.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Lower.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__LowerReplaceSpace.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/LowerReplaceSpace.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__MPC-HC_TimeCode.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/MPC-HC TimeCode.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Markdown2HTML.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Markdown2HTML.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Math.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Math.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__MeasureText.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/MeasureText.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Misc_Functions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Misc Functions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Monster.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Monster.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Months.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Months.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__NormaliseLineEndings.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/NormaliseLineEndings.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Numeral_System_Conversion_of_really_arbitrary_integers.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/Numeral System Conversion of really arbitrary integers.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__GettFFTab-ExampleScript.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/examples/GettFFTab-ExampleScript.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Menu_SetSysMenu-Sample.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/examples/Menu_SetSysMenu-Sample.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__gdip_demo.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/examples/gdip_demo.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__mci_demo.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/examples/mci_demo.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__getKeyFromValue.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/getKeyFromValue.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__get_variance.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/get_variance.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__grep.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/grep.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__hwnd.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/hwnd.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__infogulchEncodings.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/infogulchEncodings.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__iniWrapper.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/iniWrapper.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__int2roman.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/int2roman.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__invertCaseStr.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/invertCaseStr.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__jsonAHK.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/jsonAHK.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__lcs.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/lcs.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__newestFile.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/g-n/newestFile.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ObjByRef.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/ObjByRef.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ObjectTools.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/ObjectTools.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Objects_FullyClone.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/Objects_FullyClone.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__On.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/On.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Parse.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/Parse.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ParseCmdLine.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/ParseCmdLine.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__PerfectPunctuation.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/PerfectPunctuation.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Permutate.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/Permutate.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Permutations.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/Permutations.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__PivotArraySort.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/PivotArraySort.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__PixelGetColorWithinTolerance.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/PixelGetColorWithinTolerance.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Prefs.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/Prefs.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__PrintArr.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/PrintArr.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__Quoted_String_Replace.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/Quoted String Replace.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RA_StringSort.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RA_StringSort.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RPath.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RPath.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandSleep.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandSleep.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomCurve.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomCurve.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomName_2_.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomName(2).ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomName.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomName.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomPW.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomPW.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomStr.AHK",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomStr.AHK"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomVar.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomVar.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RandomiseArray.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RandomiseArray.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__ReFormatTime.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/ReFormatTime.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RegEx.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RegEx.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RegExEsc.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RegExEsc.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RegExOptions.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RegExOptions.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RegExSort.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RegExSort.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RegexLists.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RegexLists.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RelToAbs.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RelToAbs.ahk"
+ },
+ {
+  "file": "Ixiko_AHK-libs-and-classes-collection__RemoveDuplicates.ahk",
+  "source": "https://github.com/Ixiko/AHK-libs-and-classes-collection : libs/o-z/RemoveDuplicates.ahk"
+ }
+]
