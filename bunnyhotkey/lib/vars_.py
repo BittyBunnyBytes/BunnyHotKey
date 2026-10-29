@@ -55,7 +55,7 @@ def register_vars(rt):
     ro("A_OSVersion", lambda: "10.0.19045")
     ro("A_ComputerName", lambda: socket.gethostname())
     ro("A_UserName", lambda: getpass.getuser())
-    ro("A_Language", lambda: "0409")
+    ro("A_Language", lambda: _language())
     ro("A_ComSpec", lambda: "/bin/sh")
     ro("A_Temp", lambda: shell_folder("temp"))
     ro("A_WinDir", lambda: os.path.join(rt.prefix_root(), "drive_c", "windows"))
@@ -143,15 +143,16 @@ def register_vars(rt):
     rw("A_HotkeyInterval", lambda: getattr(rt, "hotkey_interval", 2000), lambda v: setattr(rt, "hotkey_interval", rt.to_int(v)))
     rw("A_HotkeyModifierTimeout", lambda: getattr(rt, "hk_mod_timeout", 50), lambda v: setattr(rt, "hk_mod_timeout", rt.to_int(v)))
     rw("A_MenuMaskKey", lambda: getattr(rt, "menu_mask_key", "vkE8"), lambda v: setattr(rt, "menu_mask_key", rt.to_str(v)))
-    rw("A_AllowMainWindow", lambda: 0, lambda v: None)
+    rw("A_AllowMainWindow", lambda: int(getattr(rt, "allow_main_window", 0)),
+       lambda v: setattr(rt, "allow_main_window", 1 if to_bool(v) else 0))
     def _tray_set(attr, value):
         setattr(rt, attr, value)
         from . import tray
         tray.refresh()
     rw("A_IconHidden", lambda: int(getattr(rt, "icon_hidden", False)), lambda v: _tray_set("icon_hidden", to_bool(v)))
     rw("A_IconTip", lambda: getattr(rt, "icon_tip", ""), lambda v: _tray_set("icon_tip", rt.to_str(v)))
-    ro("A_IconFile", lambda: "")
-    ro("A_IconNumber", lambda: "")
+    ro("A_IconFile", lambda: _icon_file(rt))
+    ro("A_IconNumber", lambda: getattr(rt, "tray_icon_number", "") if getattr(rt, "tray_icon", "") else "")
     rw("A_TrayMenu", lambda: _tray(rt), None)
     rw("A_ListLines", lambda: int(getattr(rt.thread.settings, "list_lines", 1)),
        lambda v: setattr(rt.thread.settings, "list_lines", 1 if to_bool(v) else 0))
@@ -159,10 +160,8 @@ def register_vars(rt):
     # screen / system
     ro("A_ScreenWidth", lambda: window.screen_size()[0])
     ro("A_ScreenHeight", lambda: window.screen_size()[1])
-    ro("A_ScreenDPI", lambda: 96)
-    ro("A_Cursor", lambda: "Arrow")
-    ro("A_CaretX", lambda: "")
-    ro("A_CaretY", lambda: "")
+    ro("A_ScreenDPI", lambda: window.screen_dpi())
+    ro("A_Cursor", lambda: window.cursor_name())
     rw("A_Clipboard", lambda: clipboard.get_text(), lambda v: clipboard.set_text(rt.to_str(v)))
     rw("Clipboard", lambda: clipboard.get_text(), lambda v: clipboard.set_text(rt.to_str(v)))
 
@@ -233,3 +232,39 @@ def _loopreg(rt, attr):
 def _tray(rt):
     from .gui import tray_menu
     return tray_menu(rt)
+
+
+def _icon_file(rt):
+    """A_IconFile: the full path of a custom tray icon set with TraySetIcon (blank for the default icon)."""
+    f = getattr(rt, "tray_icon", "")
+    if not f:
+        return ""
+    from .files import host_path
+    return host_path(f)
+
+
+# Windows language identifiers (A_Language) for the common locales
+_LCID = {"en_US": "0409", "en_GB": "0809", "en_AU": "0C09", "en_CA": "1009", "en_NZ": "1409", "en_IE": "1809",
+         "en_IN": "4009", "de_DE": "0407", "de_AT": "0C07", "de_CH": "0807", "fr_FR": "040C", "fr_CA": "0C0C",
+         "fr_BE": "080C", "fr_CH": "100C", "es_ES": "0C0A", "es_MX": "080A", "it_IT": "0410", "pt_BR": "0416",
+         "pt_PT": "0816", "nl_NL": "0413", "nl_BE": "0813", "sv_SE": "041D", "nb_NO": "0414", "da_DK": "0406",
+         "fi_FI": "040B", "pl_PL": "0415", "cs_CZ": "0405", "sk_SK": "041B", "hu_HU": "040E", "ro_RO": "0418",
+         "ru_RU": "0419", "uk_UA": "0422", "bg_BG": "0402", "el_GR": "0408", "tr_TR": "041F", "he_IL": "040D",
+         "ar_SA": "0401", "ja_JP": "0411", "ko_KR": "0412", "zh_CN": "0804", "zh_TW": "0404", "zh_HK": "0C04",
+         "th_TH": "041E", "vi_VN": "042A", "id_ID": "0421", "hi_IN": "0439", "lt_LT": "0427", "lv_LV": "0426",
+         "et_EE": "0425", "sl_SI": "0424", "hr_HR": "041A", "sr_RS": "241A", "ca_ES": "0403"}
+
+
+def _language():
+    import os
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        v = os.environ.get(var, "")
+        if v and v not in ("C", "POSIX"):
+            loc = v.split(".")[0].split("@")[0]
+            if loc in _LCID:
+                return _LCID[loc]
+            lang = loc.split("_")[0]
+            for k, code in _LCID.items():
+                if k.startswith(lang + "_"):
+                    return code
+    return "0409"

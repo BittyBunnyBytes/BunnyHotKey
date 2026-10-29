@@ -207,6 +207,15 @@ class X11Backend:
                     end_codes.add(kc)
             if 28 in end_codes:
                 end_codes.add(96)          # NumpadEnter
+        if hs is not None:
+            # "*" hotstrings fire on their last character, which the hook swallows: grab just those keys
+            from .. import layout
+            for h in hs.items:
+                if h.enabled and h.asterisk and h.trigger and h.backspace:
+                    for ch in {h.trigger[-1], h.trigger[-1].lower(), h.trigger[-1].upper()}:
+                        k = layout.char_to_key(ch)
+                        if k and k[0] + 8 not in {kk for kk, _ in want_keys}:
+                            end_codes.add(k[0])
         for kc in end_codes:
             key = (kc + 8, xlib.AnyModifier)
             if key not in self.grabbed_keys:

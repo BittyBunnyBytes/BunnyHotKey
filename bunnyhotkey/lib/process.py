@@ -113,6 +113,99 @@ def _verb(target):
     return None, target
 
 
+def _current_user():
+    import getpass
+    try:
+        return getpass.getuser()
+    except Exception:
+        return ""
+
+
+class _SuProcess:
+    """A program started through su on a pseudo-terminal (RunAs with a password), with the parts of
+    subprocess.Popen that Run/RunWait use."""
+
+    def __init__(self, pid, fd):
+        self.pid, self.fd, self.returncode = pid, fd, None
+        import threading
+        threading.Thread(target=self._drain, daemon=True).start()
+
+    def _drain(self):
+        while True:
+            try:
+                if not os.read(self.fd, 4096):
+                    break
+            except OSError:
+                break
+
+    def poll(self):
+        if self.returncode is None:
+            pid, status = os.waitpid(self.pid, os.WNOHANG)
+            if pid:
+                self.returncode = os.waitstatus_to_exitcode(status)
+        return self.returncode
+
+    def wait(self, timeout=None):
+        if self.returncode is None:
+            _, status = os.waitpid(self.pid, 0)
+            self.returncode = os.waitstatus_to_exitcode(status)
+        return self.returncode
+
+
+def _su_spawn(user, password, argv, cwd, target):
+    import pty
+    import shlex
+    import time as _t
+    cmd = shlex.join(argv)
+    if cwd:
+        cmd = f"cd {shlex.quote(cwd)} && {cmd}"
+    pid, fd = pty.fork()
+    if pid == 0:
+        try:
+            os.execvp("su", ["su", user, "-c", cmd])
+        finally:
+            os._exit(127)
+    buf = b""
+    end = _t.monotonic() + 5
+    while _t.monotonic() < end and b":" not in buf:          # wait for su's password prompt
+        try:
+            buf += os.read(fd, 256)
+        except OSError:
+            break
+    os.write(fd, password.encode() + b"\n")
+    # authenticated once su starts the program as its child; a wrong password makes su fail (after PAM's delay)
+    ok, out = False, b""
+    end = _t.monotonic() + 8
+    while _t.monotonic() < end:
+        try:
+            with open(f"/proc/{pid}/task/{pid}/children") as fh:
+                if fh.read().strip():
+                    ok = True
+                    break
+        except OSError:
+            pass
+        wpid, status = os.waitpid(pid, os.WNOHANG)
+        if wpid:
+            code = os.waitstatus_to_exitcode(status)
+            ok = code == 0 and b"failure" not in out.lower()
+            p = _SuProcess.__new__(_SuProcess)
+            p.pid, p.fd, p.returncode = pid, fd, code
+            if ok:
+                return p
+            break
+        import select
+        if select.select([fd], [], [], 0.05)[0]:
+            try:
+                out += os.read(fd, 1024)
+            except OSError:
+                pass
+    if not ok:
+        err = O.new_error("OSError", "The user name or password is incorrect.", target)
+        from ..errors import AhkThrow
+        raise AhkThrow(err)
+    return _SuProcess(pid, fd)
+
+
 def _spawn(target, workdir, options):
     verb, target = _verb(S(target))
     argv = translate_command(target)
@@ -123,6 +216,11 @@ def _spawn(target, workdir, options):
     cwd = host_path(S(workdir)) if S(workdir) else None
     opts = S(options).lower()
     stdout = subprocess.DEVNULL if "hide" in opts else None
+    ra = getattr(O.RT, "run_as", None)
+    if ra and ra[0] and ra[0] != _current_user():
+        if len(ra) > 2 and ra[2]:
+            return _su_spawn(ra[0], ra[2], argv, cwd, S(target))
+        argv = ["pkexec", "--user", ra[0]] + argv
     try:
         return subprocess.Popen(argv, cwd=cwd, stdout=stdout, stdin=subprocess.DEVNULL if "hide" in opts else None,
                                 start_new_session=True)

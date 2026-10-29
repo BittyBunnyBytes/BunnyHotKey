@@ -267,6 +267,11 @@ def DllCall(func, *args):
     lib, _, fn = name.rpartition("\\")
     if lib and (".so" in lib or lib.startswith("lib")) and not lib.lower().endswith(".dll"):
         return _linux_call(lib, fn, pairs, ret)
+    if not lib:
+        for handle in _LOADED:
+            f = getattr(handle, fn, None)
+            if f is not None:
+                return _c_call(f, pairs, ret)
     key = fn.lower()
     if key.endswith(".dll"):
         key = key[:-4]
@@ -386,6 +391,28 @@ def ClipWait(timeout=UNSET, wait_for_any=0):
     return clip_wait(None if timeout is UNSET else float(O.RT.to_num(timeout)), wait_for_any)
 
 
-@export()
-def DllLoad(*a):
-    return ""
+_LOADED: list = []          # libraries preloaded with #DllLoad, searched by DllCall("FunctionName")
+
+
+def dll_load(spec):
+    """#DllLoad [*i] FileOrDirName.  Linux shared libraries are loaded so their functions can be called by bare
+    name.  A Windows DLL that doesn't exist here is skipped, so scripts that preload one still load (calls into
+    it raise a clear error), and *i suppresses the error for a missing library, as in AutoHotkey."""
+    s = spec.strip()
+    optional = s.lower().startswith("*i ")
+    if optional:
+        s = s[3:].strip()
+    if not s:
+        return True
+    from .files import host_path
+    path = host_path(s) if ("/" in s or "\\" in s) else s
+    if s.lower().endswith(".dll") or s.lower().endswith(".dll\""):
+        return True
+    for candidate in (path, ctypes.util.find_library(os.path.basename(s).replace("lib", "", 1).split(".so")[0]) or ""):
+        if candidate:
+            try:
+                _LOADED.append(ctypes.CDLL(candidate))
+                return True
+            except OSError:
+                continue
+    return optional

@@ -355,6 +355,7 @@ def LoadPicture(filename, options="", imagetype=UNSET):
 @export()
 def TraySetIcon(file="", number=UNSET, freeze=UNSET):
     rt().tray_icon = S(file)
+    rt().tray_icon_number = rt().to_int(number) if number not in (UNSET, "") else 1
     from . import tray
     tray.refresh()
     return ""

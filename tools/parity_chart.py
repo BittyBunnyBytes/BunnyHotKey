@@ -60,8 +60,12 @@ def classify():
         elif "Windows-only" in src or "not supported by Bunny" in src or "not available in Bunny" in src:
             result[n] = "missing"
         else:
-            body = [l for l in src.splitlines()[1:] if l.strip() and not l.strip().startswith(('"""', "#"))]
-            stub = len(body) <= 2 and any(t in src for t in ('return ""', "return 0", "return 1", "AhkArray(None, [])"))
+            body = [l.strip() for l in src.splitlines()[1:] if l.strip() and not l.strip().startswith(('"""', "#"))]
+            body = [l for l in body if not l.startswith("@")]
+            # a stub returns a fixed value no matter what (at most after resolving its window argument)
+            consts = ('return ""', "return 0", "return 1", "return AhkArray(None, [])")
+            noop = re.compile(r"^(\w+(, \w+)* = )?_(win_arg|ctl)\(")
+            stub = bool(body) and body[-1] in consts and all(noop.match(l) for l in body[:-1])
             result[n] = "partial" if stub else "full"
     return result
 

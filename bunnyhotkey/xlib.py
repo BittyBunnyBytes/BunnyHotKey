@@ -179,6 +179,7 @@ def _setup(x):
         ("XDisplayKeycodes", c_int, [c_void_p, POINTER(c_int), POINTER(c_int)]),
         ("XQueryKeymap", c_int, [c_void_p, ctypes.c_char * 32]),
         ("XDefaultScreen", c_int, [c_void_p]),
+        ("XDisplayWidthMM", c_int, [c_void_p, c_int]),
         ("XDisplayWidth", c_int, [c_void_p, c_int]),
         ("XDisplayHeight", c_int, [c_void_p, c_int]),
         ("XQueryTree", c_int, [c_void_p, Window, POINTER(Window), POINTER(Window), POINTER(POINTER(Window)), POINTER(c_uint)]),

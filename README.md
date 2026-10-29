@@ -15,7 +15,7 @@
 
 <!-- parity:summary:start -->
 **In short:** the AutoHotkey v2 *language* is essentially complete (99%), and
-**97% of its built-in function API** is reproduced (332 full, 3 partial, 9 missing).
+**97% of its built-in function API** is reproduced (333 full, 1 partial, 10 missing).
 
 **Missing or left to do:**
 - **COM/ActiveX:** Windows-only (`ComObject`, the Gui ActiveX control, `SoundGetInterface`).

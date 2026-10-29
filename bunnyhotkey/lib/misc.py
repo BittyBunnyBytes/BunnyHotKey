@@ -56,7 +56,31 @@ def DriveGetSpaceFree(path):
 
 @export()
 def DriveGetStatusCD(drive=""):
-    return "not ready"
+    """Status of an optical drive ("open", "stopped", "not ready"...), from the Linux CD-ROM ioctl."""
+    import fcntl
+    d = O.RT.to_str(drive).strip()
+    devs = [d] if d.startswith("/dev/") else sorted(f"/dev/{n}" for n in os.listdir("/dev") if n.startswith("sr"))
+    if not devs:
+        throw("OSError", "The device is not ready.", d)
+    try:
+        fd = os.open(devs[0], os.O_RDONLY | os.O_NONBLOCK)
+    except OSError as e:
+        throw("OSError", e.strerror or "The device is not ready.", devs[0])
+    try:
+        st = fcntl.ioctl(fd, 0x5326, 0)          # CDROM_DRIVE_STATUS
+        if st == 2:                              # CDS_TRAY_OPEN
+            return "open"
+        if st == 4:                              # CDS_DISC_OK: audio playback state, if any
+            try:
+                sub = bytearray(16)
+                sub[0] = 2                       # CDROM_MSF
+                fcntl.ioctl(fd, 0x530B, sub)     # CDROMSUBCHNL
+                return {0x11: "playing", 0x12: "paused"}.get(sub[1], "stopped")
+            except OSError:
+                return "stopped"
+        return "not ready"
+    finally:
+        os.close(fd)
 
 
 for _name in ("DriveLock", "DriveUnlock", "DriveRetract"):
@@ -97,7 +121,10 @@ def EditPaste(text, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 
 @export()
 def RunAs(user="", password="", domain=""):
-    O.RT.run_as = (S(user), S(domain))
+    """Later Run/RunWait calls start programs as this user (su with the password, or pkexec without one);
+    RunAs() with no user turns it off."""
+    u = S(user)
+    O.RT.run_as = (u, S(domain), S(password)) if u else None
     return ""
 
 

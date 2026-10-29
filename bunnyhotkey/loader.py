@@ -378,6 +378,10 @@ class Program:
                               "menumaskkey", "allowsamelinecomments", "commentflag", "escapechar"):
                     if name == "persistent":
                         rt.persistent = True
+                    elif name == "dllload":
+                        from .lib.dllcall import dll_load
+                        if not dll_load(str(node.args or "")):
+                            raise AhkSyntaxError("Failed to load DLL.", node.file, node.line, str(node.args))
                     elif name in ("installkeybdhook", "installmousehook"):
                         rt.want_hook = True
                     elif name == "keyhistory":

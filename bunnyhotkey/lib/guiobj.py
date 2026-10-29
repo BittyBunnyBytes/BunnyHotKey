@@ -137,7 +137,7 @@ _ctrl_ids = itertools.count(1)
 class GuiObj(AhkObject):
     __slots__ = ("wid", "ctrls", "events", "event_obj", "prev", "section", "title", "shown", "mx", "my",
                  "destroyed", "names", "xid", "font", "bg", "tab", "tab_counts", "menubar", "lastfound", "ctl_color",
-                 "dpi_scale", "owner")
+                 "dpi_scale", "owner", "disabled")
 
     def __init__(self, proto=None):
         super().__init__(proto or CLASSES["Gui"].prototype)
@@ -162,12 +162,13 @@ class GuiObj(AhkObject):
         self.lastfound = False
         self.dpi_scale = True
         self.owner = None
+        self.disabled = False
 
 
 class CtrlObj(AhkObject):
     __slots__ = ("cid", "gui", "ctype", "name", "events", "x", "y", "w", "h", "rows", "altsubmit", "group",
                  "enabled", "visible", "tab", "buddy", "multi", "readonly", "password", "sized", "font",
-                 "dtformat", "imagelist", "color", "bg", "header")
+                 "dtformat", "imagelist", "color", "bg", "header", "exstyle")
 
     def __init__(self, gui, ctype):
         super().__init__(CLASSES["Gui." + CLASS_OF.get(ctype, "Text")].prototype)
@@ -193,6 +194,7 @@ class CtrlObj(AhkObject):
         self.color = ""
         self.bg = ""
         self.header = TAB_HEADER
+        self.exstyle = None
 
 
 def _srv():
@@ -241,6 +243,7 @@ def gui_opt(this, options):
             kw["sysmenu"] = on
         elif t == "disabled":
             kw["disabled"] = on
+            this.disabled = on
         elif t == "lastfound":
             this.lastfound = True
             if this.xid:

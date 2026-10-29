@@ -513,10 +513,99 @@ def WinGetMinMax(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     return 0
 
 
+# Window styles <-> X11.  Decorations and window-manager functions are the Motif hints every X11 window manager
+# honours; visibility, minimize/maximize and disabled come from the window state.
+WS_POPUP, WS_MINIMIZE_ST, WS_MAXIMIZE_ST = 0x80000000, 0x20000000, 0x01000000
+WS_CAPTION, WS_BORDER, WS_DLGFRAME, WS_SYSMENU, WS_THICKFRAME = 0xC00000, 0x800000, 0x400000, 0x80000, 0x40000
+WS_MINIMIZEBOX, WS_MAXIMIZEBOX, WS_CLIPSIBLINGS = 0x20000, 0x10000, 0x04000000
+MWM_FUNC = {"resize": 2, "move": 4, "minimize": 8, "maximize": 16, "close": 32}
+MWM_DECOR = {"border": 2, "resizeh": 4, "title": 8, "menu": 16, "minimize": 32, "maximize": 64}
+
+
+def _motif(d, w):
+    v = d.get_longs(w, "_MOTIF_WM_HINTS")
+    return [int(x) for x in v[:5]] + [0] * (5 - len(v[:5])) if v else None
+
+
+_STYLE_SET: dict[int, tuple] = {}     # window -> (Motif hints we wrote, frame style bits the script asked for)
+FRAME_BITS = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+
+
+def _style_bits(d, w):
+    m = _motif(d, w)
+    remembered = _STYLE_SET.get(w)
+    if remembered is not None and remembered[0] == m:
+        style = WS_CLIPSIBLINGS | remembered[1]     # e.g. WS_SYSMENU stays set without a caption, as on Windows
+        return style | _state_bits(d, w)
+    style = WS_CLIPSIBLINGS
+    if m is None or not (m[0] & 2) or (m[2] & 1):
+        decor = {"border", "resizeh", "title", "menu", "minimize", "maximize"}
+    else:
+        decor = {k for k, b in MWM_DECOR.items() if m[2] & b}
+    if m is not None and m[0] & 1 and not (m[1] & 1):
+        funcs = {k for k, b in MWM_FUNC.items() if m[1] & b}
+        decor &= ({"minimize"} if "minimize" in funcs else set()) | ({"maximize"} if "maximize" in funcs else set()) \
+            | {"border", "title", "menu"} | ({"resizeh"} if "resize" in funcs else set())
+    if "title" in decor:
+        style |= WS_CAPTION
+    elif "border" in decor:
+        style |= WS_BORDER
+    else:
+        style |= WS_POPUP
+    if "menu" in decor:
+        style |= WS_SYSMENU
+    if "resizeh" in decor:
+        style |= WS_THICKFRAME
+    if "minimize" in decor:
+        style |= WS_MINIMIZEBOX
+    if "maximize" in decor:
+        style |= WS_MAXIMIZEBOX
+    return style | _state_bits(d, w)
+
+
+def _state_bits(d, w):
+    style = 0
+    st = d.get_longs(w, "_NET_WM_STATE")
+    if is_visible(d, w):
+        style |= WS_VISIBLE
+    if d.atom("_NET_WM_STATE_HIDDEN") in st:
+        style |= WS_MINIMIZE_ST
+    if d.atom("_NET_WM_STATE_MAXIMIZED_VERT") in st and d.atom("_NET_WM_STATE_MAXIMIZED_HORZ") in st:
+        style |= WS_MAXIMIZE_ST
+    from .guiobj import gui_for_window
+    g = gui_for_window(w)
+    if g is not None and getattr(g, "disabled", False):
+        style |= WS_DISABLED
+    return style
+
+
+def _set_motif(d, w, style):
+    import ctypes
+    decor = 0
+    if style & WS_CAPTION == WS_CAPTION:
+        decor |= MWM_DECOR["title"] | MWM_DECOR["border"]
+    elif style & WS_BORDER:
+        decor |= MWM_DECOR["border"]
+    if style & WS_POPUP and not style & WS_CAPTION:
+        decor = 0
+    for bit, key in ((WS_SYSMENU, "menu"), (WS_THICKFRAME, "resizeh"), (WS_MINIMIZEBOX, "minimize"),
+                     (WS_MAXIMIZEBOX, "maximize")):
+        if style & bit and decor & (MWM_DECOR["title"] | MWM_DECOR["border"]):
+            decor |= MWM_DECOR[key]
+    funcs = MWM_FUNC["move"] | (MWM_FUNC["close"] if style & WS_SYSMENU else 0) | \
+        (MWM_FUNC["resize"] if style & WS_THICKFRAME else 0) | (MWM_FUNC["minimize"] if style & WS_MINIMIZEBOX else 0) | \
+        (MWM_FUNC["maximize"] if style & WS_MAXIMIZEBOX else 0)
+    hints = (ctypes.c_ulong * 5)(1 | 2, funcs, decor, 0, 0)
+    a = d.atom("_MOTIF_WM_HINTS")
+    d.x.XChangeProperty(d.dpy, w, a, a, 32, 0, hints, 5)
+    d.flush()
+    _STYLE_SET[w] = ([1 | 2, funcs, decor, 0, 0], style & FRAME_BITS)
+
+
 @export()
 def WinGetStyle(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _win_arg(t, txt, xt, xx)
-    return 0x14CF0000   # WS_OVERLAPPEDWINDOW | WS_VISIBLE
+    d = _dpy()
+    return _style_bits(d, _win_arg(t, txt, xt, xx))
 
 
 @export()
@@ -901,15 +990,49 @@ def _region_rects(spec, width, height):
     return rects
 
 
+def _set_window_enabled(w, on):
+    from .guiobj import gui_for_window, gui_opt
+    g = gui_for_window(w)
+    if g is None:
+        throw("OSError", "X11 can't disable another program's window.")
+    g.disabled = not on
+    gui_opt(g, "-Disabled" if on else "+Disabled")
+
+
 @export()
 def WinSetEnabled(v, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _win_arg(t, txt, xt, xx)
+    d = _dpy()
+    w = _win_arg(t, txt, xt, xx)
+    cur = not (_style_bits(d, w) & WS_DISABLED)
+    s = S(v).strip().lower()
+    on = (not cur) if s in ("-1", "toggle") else s not in ("0", "off", "false")
+    _set_window_enabled(w, on)
     return ""
 
 
 @export()
 def WinSetStyle(v, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _win_arg(t, txt, xt, xx)
+    """Decorations and window-manager functions through the Motif hints; WS_VISIBLE, WS_MINIMIZE, WS_MAXIMIZE
+    and WS_DISABLED through the window state."""
+    d = _dpy()
+    w = _win_arg(t, txt, xt, xx)
+    old = _style_bits(d, w)
+    new = _new_style(old, v) & 0xFFFFFFFF
+    frame = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+    if (old ^ new) & frame:
+        _set_motif(d, w, new)
+    if (old ^ new) & WS_VISIBLE:
+        (WinShow if new & WS_VISIBLE else WinHide)(f"ahk_id {w}")
+    if (old ^ new) & WS_MAXIMIZE_ST:
+        _wm_state(d, w, 1 if new & WS_MAXIMIZE_ST else 0, "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")
+    if (old ^ new) & WS_MINIMIZE_ST:
+        if new & WS_MINIMIZE_ST:
+            d.x.XIconifyWindow(d.dpy, w, d.x.XDefaultScreen(d.dpy))
+        else:
+            activate(d, w)
+    if (old ^ new) & WS_DISABLED:
+        _set_window_enabled(w, not new & WS_DISABLED)
+    d.flush()
     return ""
 
 
@@ -1335,6 +1458,8 @@ def ControlGetExStyle(control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     c, win = _ctl(control, t, txt, xt, xx)
     if c is None:
         return 0
+    if getattr(c, "exstyle", None) is not None:
+        return c.exstyle
     return 0x200 if c.ctype in ("Edit", "ListBox", "ListView", "TreeView", "ComboBox", "DateTime", "Hotkey") else 0
 
 
@@ -1364,7 +1489,10 @@ def ControlSetStyle(value, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
 
 @export()
 def ControlSetExStyle(value, control, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    _ctl(control, t, txt, xt, xx)
+    c, win = _ctl(control, t, txt, xt, xx)
+    if c is None:
+        throw("TargetError", "Target control not found.")
+    c.exstyle = _new_style(ControlGetExStyle(c), value) & 0xFFFFFFFF      # extended styles are cosmetic in GTK
     return ""
 
 
@@ -1699,6 +1827,64 @@ def _coord_origin(kind):
         return 0, 0
     x, y, w, h = geometry(d, a, client=(mode == "Client"))
     return x, y
+
+
+def screen_dpi():
+    """A_ScreenDPI: Xft.dpi from the X resource database (what toolkits scale by), else the screen's physical DPI."""
+    d = _dpy()
+    if d is None:
+        return 96
+    res = d.get_string(d.root, "RESOURCE_MANAGER") or ""
+    m = re.search(r"^Xft\.dpi:\s*([0-9.]+)", res, re.M)
+    if m:
+        return int(round(float(m.group(1))))
+    scr = d.x.XDefaultScreen(d.dpy)
+    mm = d.x.XDisplayWidthMM(d.dpy, scr)
+    return int(round(d.x.XDisplayWidth(d.dpy, scr) * 25.4 / mm)) if mm else 96
+
+
+# X cursor names (XFixes) -> A_Cursor values
+_CURSORS = {"left_ptr": "Arrow", "default": "Arrow", "arrow": "Arrow", "top_left_arrow": "Arrow",
+            "xterm": "IBeam", "text": "IBeam", "ibeam": "IBeam", "watch": "Wait", "wait": "Wait",
+            "left_ptr_watch": "AppStarting", "progress": "AppStarting", "half-busy": "AppStarting",
+            "crosshair": "Cross", "cross": "Cross", "tcross": "Cross", "question_arrow": "Help", "help": "Help",
+            "fleur": "SizeAll", "move": "SizeAll", "all-scroll": "SizeAll", "size_all": "SizeAll",
+            "sb_v_double_arrow": "SizeNS", "ns-resize": "SizeNS", "row-resize": "SizeNS", "v_double_arrow": "SizeNS",
+            "top_side": "SizeNS", "bottom_side": "SizeNS", "n-resize": "SizeNS", "s-resize": "SizeNS",
+            "sb_h_double_arrow": "SizeWE", "ew-resize": "SizeWE", "col-resize": "SizeWE", "h_double_arrow": "SizeWE",
+            "left_side": "SizeWE", "right_side": "SizeWE", "e-resize": "SizeWE", "w-resize": "SizeWE",
+            "fd_double_arrow": "SizeNWSE", "nwse-resize": "SizeNWSE", "top_left_corner": "SizeNWSE",
+            "bottom_right_corner": "SizeNWSE", "nw-resize": "SizeNWSE", "se-resize": "SizeNWSE",
+            "bd_double_arrow": "SizeNESW", "nesw-resize": "SizeNESW", "top_right_corner": "SizeNESW",
+            "bottom_left_corner": "SizeNESW", "ne-resize": "SizeNESW", "sw-resize": "SizeNESW",
+            "sb_up_arrow": "UpArrow", "up-arrow": "UpArrow", "center_ptr": "UpArrow",
+            "not-allowed": "No", "crossed_circle": "No", "no-drop": "No", "circle": "No",
+            "hand2": "Unknown", "hand1": "Unknown", "pointer": "Unknown", "pointing_hand": "Unknown"}
+
+
+def cursor_name():
+    """A_Cursor: the current mouse cursor's type, from the XFixes cursor name."""
+    import ctypes
+    from .. import xlib
+    d = _dpy()
+    xf = xlib._lib("Xfixes")
+    if d is None or xf is None:
+        return "Unknown"
+
+    class XFixesCursorImage(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort),
+                    ("height", ctypes.c_ushort), ("xhot", ctypes.c_ushort), ("yhot", ctypes.c_ushort),
+                    ("cursor_serial", ctypes.c_ulong), ("pixels", ctypes.c_void_p), ("atom", ctypes.c_ulong),
+                    ("name", ctypes.c_char_p)]
+    xf.XFixesGetCursorImage.restype = ctypes.POINTER(XFixesCursorImage)
+    xf.XFixesGetCursorImage.argtypes = [ctypes.c_void_p]
+    img = xf.XFixesGetCursorImage(d.dpy)
+    if not img:
+        return "Unknown"
+    name = (img.contents.name or b"").decode(errors="replace")
+    d.x.XFree.argtypes = [ctypes.c_void_p]
+    d.x.XFree(img)
+    return _CURSORS.get(name, "Unknown" if name else "Arrow")
 
 
 def grab(x, y, w, h):

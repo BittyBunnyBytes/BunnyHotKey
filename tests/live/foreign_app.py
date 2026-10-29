@@ -1,4 +1,6 @@
 """A small GTK application used as a *foreign* program by the AT-SPI control tests (it is not a BHK Gui)."""
+import os
+
 import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
@@ -16,6 +18,9 @@ bar.append(filem)
 box.pack_start(bar, False, False, 0)
 box.pack_start(Gtk.Label(label="Name:"), False, False, 0)
 entry = Gtk.Entry(text="hello")
+if os.environ.get("BHK_FOREIGN_LOG"):
+    # every change to the entry, in order, for tests that check what reached the app and when
+    entry.connect("changed", lambda e: open(os.environ["BHK_FOREIGN_LOG"], "a").write(e.get_text() + "\n"))
 box.pack_start(entry, False, False, 0)
 chk = Gtk.CheckButton(label="Enable feature")
 box.pack_start(chk, False, False, 0)

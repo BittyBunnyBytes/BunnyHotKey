@@ -868,6 +868,50 @@ def InputHook(options="", endkeys="", matchlist=""):
 
 @export()
 def CaretGetPos(outx=UNSET, outy=UNSET):
-    setref(outx, "")
-    setref(outy, "")
-    return 0
+    """The text caret of the focused control in the active window, from AT-SPI (works for GTK, Qt with
+    accessibility, LibreOffice, Firefox...); coordinates follow CoordMode "Caret"."""
+    pos = _caret_screen_pos()
+    if pos is None:
+        setref(outx, "")
+        setref(outy, "")
+        return 0
+    from .window import _coord_origin
+    ox, oy = _coord_origin("Caret")
+    setref(outx, pos[0] - ox)
+    setref(outy, pos[1] - oy)
+    return 1
+
+
+def _caret_screen_pos():
+    from . import atspi_
+    from .window import _dpy, _win_info, active_window
+    if not atspi_.available():
+        return None
+    d = _dpy()
+    win = active_window(d) if d is not None else 0
+    if not win:
+        return None
+    root = atspi_.window_accessible(*_win_info(win))
+    if root is None:
+        return None
+    A = atspi_.Atspi()
+    stack = [root]
+    seen = 0
+    while stack and seen < 3000:
+        acc = stack.pop()
+        seen += 1
+        if atspi_._state(acc, "FOCUSED") and "Text" in atspi_._ifaces(acc):
+            try:
+                off = A.Text.get_caret_offset(acc)
+                n = A.Text.get_character_count(acc)
+                r = A.Text.get_character_extents(acc, max(0, min(off, n - 1)) if n else 0, A.CoordType.SCREEN)
+                if off >= n and n:          # caret after the last character
+                    return r.x + r.width, r.y
+                if r.width or r.height or n:
+                    return r.x, r.y
+                e = A.Component.get_extents(acc, A.CoordType.SCREEN)
+                return e.x, e.y
+            except Exception:
+                return None
+        stack.extend(atspi_._children(acc))
+    return None
