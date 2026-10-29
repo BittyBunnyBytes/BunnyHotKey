@@ -138,6 +138,8 @@ class Loader:
         stmts = parse_lines(lines, path)
         comp = Compiler(self.rt)
         auto, hot = comp.compile_program(stmts)
+        if self.rt.script_version == "1":
+            v1.index_classes(self.rt)
         self.rt.label_table = {}
         return auto, hot
 

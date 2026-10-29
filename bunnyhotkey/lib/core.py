@@ -474,7 +474,9 @@ def construct(cls, args):
     r.call_method(obj, "__Init", [])
     p, _ = obj.find("__New")
     if p is not None and p.call is not None:
-        r.call(p.call, [obj, *args])
+        res = r.call(p.call, [obj, *args])
+        if r.v1 and isinstance(res, AhkObject):
+            return res          # v1: an object returned by __New becomes the result of new
     return obj
 
 

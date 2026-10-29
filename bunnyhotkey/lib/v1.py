@@ -114,6 +114,9 @@ V1_BIVARS = ("errorlevel", "clipboard", "a_thislabel", "a_thismenu", "a_thismenu
              "a_timeidlephysical", "a_endchar", "a_priorkey")
 
 
+V1_VERSION = "1.1.37.02"      # the last v1.1 release; A_AhkVersion in v1 scripts
+
+
 class V1State:
     pass
 
@@ -121,6 +124,7 @@ class V1State:
 def setup(r, tr):
     """Called by the loader once a v1 script has been translated, before it is compiled."""
     r.v1 = True
+    r.ahk_version = V1_VERSION
     r.v1_labels = tr.labels                 # lower v1 label name -> label name in the translated script
     r.v1_noenv = tr.flags["noenv"]
     r.v1_superglobals = {n.lower() for n in tr.superglobals}
@@ -145,6 +149,7 @@ def setup(r, tr):
     st.splash = {}
     r.v1_bivar_names = set(V1_BIVARS)
     r.v1_set_errorlevel = _set_el
+    r.v1_base = v1_base
     r.v1_cell = _cell
     r.v1_lookup_func = lookup_func
     r.v1_run_from = run_from
@@ -499,7 +504,13 @@ def _arg(n):
 
 @export("__v1_IsByRef")
 def _isbyref(ref):
-    return 1 if type(ref) is VarRef else 0
+    if type(ref) is not VarRef:
+        return 0
+    frames = O.RT.v1_frames
+    f = frames[-1] if frames else None
+    if f is None or not any(c is ref.cell for c in f.cells):
+        return 0
+    return 1 if f.aliased and id(ref.cell) in f.aliased else 0
 
 
 # ================================================================ v1 objects
@@ -530,16 +541,22 @@ class V1Obj(AhkObject):
         return "Object"
 
     def find(self, name):
-        key = (1, name.lower())
+        low = name.lower()
+        key = (1, low)
         o = self
         while o is not None:
             if isinstance(o, V1Obj):
                 p = o.data.get(key)
                 if p is not None:
                     return p, o
-            p = o.props.get(name.lower())
+            p = o.props.get(low)
             if p is not None:
                 return p, o
+            if "__class" in o.props and not isinstance(o, AhkClass) and low != "prototype":
+                cls = proto_class(o)       # v1 instances see their class's static members
+                p = cls.props.get(low) if cls is not None else None
+                if p is not None and p.is_value:
+                    return p, cls
             o = o.base
         return None, None
 
@@ -569,12 +586,18 @@ class V1Obj(AhkObject):
         p = self.data.get(_okey(args[0]))
         if p is None:
             if type(args[0]) is str and args[0].lower() == "base":
-                return self.base if self.base is not O.RT.v1_obj_proto else ""
+                return v1_base(self)
             o = self.base
             while o is not None:
                 if isinstance(o, V1Obj) and _okey(args[0]) in o.data:
                     v = o.data[_okey(args[0])].value
                     break
+                if type(args[0]) is str and "__class" in o.props and not isinstance(o, AhkClass):
+                    cls = proto_class(o)
+                    q = cls.props.get(args[0].lower()) if cls is not None else None
+                    if q is not None and q.is_value and args[0].lower() != "prototype":
+                        v = q.value
+                        break
                 o = o.base
             else:
                 return ""
@@ -608,10 +631,53 @@ class V1Obj(AhkObject):
         return [(p.name, p.value) for k, p in sorted(self.data.items(), key=sk)]
 
 
+def v1_base(o):
+    """obj.base in v1: an instance's base is its class object, not v2's prototype."""
+    b = o.base
+    if b is None or b is O.RT.v1_obj_proto:
+        return ""
+    return proto_class(b) or b
+
+
+_PROTO_CLASS = {}
+
+
+def index_classes(r):
+    """Remember every class's prototype once the script is compiled, before any class variable is reassigned."""
+    def walk(cls):
+        proto = cls.prototype
+        if proto is not None:
+            _PROTO_CLASS[id(proto)] = (proto, cls)
+        for p in list(cls.props.values()):
+            if p.is_value and isinstance(p.value, AhkClass) and p.value is not cls and p.name.lower() != "base":
+                walk(p.value)
+    for c in list(r.globals.values()):
+        if isinstance(c.value, AhkClass):
+            walk(c.value)
+
+
+def proto_class(b):
+    """The class whose Prototype is `b`, or None."""
+    hit = _PROTO_CLASS.get(id(b))
+    if hit is not None and hit[0] is b:
+        return hit[1]
+    p = b.props.get("__class")
+    if p is not None and p.is_value and type(p.value) is str and not isinstance(b, AhkClass):
+        parts = p.value.split(".")
+        c = O.RT.globals.get(parts[0].lower())
+        cls = c.value if c is not None else None
+        for part in parts[1:]:
+            q = cls.props.get(part.lower()) if isinstance(cls, AhkObject) else None
+            cls = q.value if q is not None and q.is_value else None
+        if isinstance(cls, AhkClass) and cls.prototype is b:
+            return cls
+    return None
+
+
 def v1obj_from(pairs):
     o = V1Obj()
     for k, v in pairs:
-        o.set(k, v)
+        o.native_item_set(v, [k])      # a "base" key sets the object's base, as obj.base := x does
     return o
 
 
@@ -1140,9 +1206,11 @@ def _round(x, n=0):
     if v is None:
         return ""
     d = I(n)
+    m = 10 ** d
+    # BIF_Round: halves round away from zero
+    r = math.floor(v * m + 0.5) / m if v >= 0 else math.ceil(v * m - 0.5) / m
     if d > 0:
-        return ("%." + str(d) + "f") % (math.floor(v * 10 ** d + 0.5) / 10 ** d)
-    r = math.floor(v * 10 ** d + 0.5) / 10 ** d if d else math.floor(v + 0.5)
+        return ("%." + str(d) + "f") % r
     return int(r)
 
 
@@ -1184,7 +1252,7 @@ def _winactive(*args):
     return quiet(B, "WinActive", *U(*args)) or 0
 
 
-@export("__v1_GetKeyState")
+@export("__v1_GetKeyStateFn")
 def _getkeystate(key, mode=""):
     try:
         return B("GetKeyState", S(key), *U(mode))
@@ -1693,6 +1761,9 @@ def _sort(ref, opts=""):
     if fm:
         cb = lookup_func(fm[1]) or UNSET
         o = o[:fm.start()] + o[fm.end():]
+        if cb is not UNSET and not getattr(cb, "is_variadic", lambda: False)() and cb.max_params() < 3:
+            fn = cb
+            cb = O.BuiltinFunc("SortCallback", lambda a, b, off=0: fn.call([a, b]), 2, 3)   # v1 omits Offset
     out(ref, B("Sort", _sv(ref), o, cb))
 
 
@@ -2073,8 +2144,7 @@ def _keywait(key, opts=""):
 def _getkeystate_cmd(ref, key, mode=""):
     try:
         v = B("GetKeyState", S(key), *U(mode))
-        out(ref, ("D" if v else "U") if S(mode).upper() in ("", "P") or S(mode).upper() == "T" and False else
-            (("D" if v else "U") if S(mode).upper() != "T" else ("D" if v else "U")) if type(v) is int else v)
+        out(ref, ("D" if v else "U") if type(v) is int else v)    # joystick axes etc. give a number
     except AhkThrow:
         out(ref, "")
 

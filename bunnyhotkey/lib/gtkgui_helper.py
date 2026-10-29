@@ -1183,7 +1183,7 @@ def find_item(c, s, prefix=False):
 
 def load_picture(c, path):
     c["file"] = path
-    w = c["w"]
+    w = c.get("img") or c["w"]
     want_w, want_h = c.get("pw") or -1, c.get("ph") or -1
     if not os.path.exists(path):
         w.clear()
@@ -1578,6 +1578,7 @@ def make(win, cid, t, opts):
         w = Gtk.Frame(label=text)
     elif t == "Picture":
         w = Gtk.Image()
+        c["img"] = w
         c["pw"], c["ph"] = opts.get("w"), opts.get("h")
         load_picture(c, text)
         box = Gtk.EventBox()

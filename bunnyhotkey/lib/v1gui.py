@@ -37,7 +37,7 @@ LIST_TYPES = {"ddl", "dropdownlist", "combobox", "listbox", "tab", "tab2", "tab3
 
 
 class Ctl:
-    __slots__ = ("obj", "type", "var", "glabel", "altsubmit", "radio_group", "gui")
+    __slots__ = ("obj", "type", "var", "glabel", "altsubmit", "radio_group", "gui", "handlers")
 
     def __init__(self, gui, obj, typ, var, glabel, altsubmit):
         self.gui = gui
@@ -47,6 +47,7 @@ class Ctl:
         self.glabel = glabel
         self.altsubmit = altsubmit
         self.radio_group = None
+        self.handlers = {}          # event kind -> v1 g-label handler (also fired by GuiControl Choose |N)
 
 
 class Win:
@@ -189,7 +190,8 @@ class V1Gui:
 
     # ------------------------------------------------------------ Gui command
     def gui(self, sub, v1="", v2="", v3=""):
-        sub = S(sub).strip()
+        sub = S(sub)
+        sub = sub.strip() if not re.search(r'Delimiter\s$', sub, re.I) else sub.lstrip()
         name = None
         m = re.match(r'^([^:\s]+):(.*)$', sub)
         if m and not sub.startswith(("+", "-")):
@@ -279,6 +281,10 @@ class V1Gui:
 
     def options(self, w, opts):
         rest = []
+        m = re.search(r'(?:^|\s)\+?Delimiter(\S|\s)', opts, re.I)
+        if m and m[1] in " \t\n\r" and not re.match(r'(?:^|\s)\+?Delimiter(space|tab)', opts[m.start():].strip(), re.I):
+            w.delimiter = m[1]          # Delimiter`n etc.: the delimiter is a whitespace character
+            opts = opts[:m.start()] + " " + opts[m.end():]
         for o in opts.split():
             lo = o.lower()
             if lo.startswith("+label") or lo.startswith("label"):
@@ -312,7 +318,8 @@ class V1Gui:
         group = False
         for o in opts.split():
             lo = o.lower()
-            if lo.startswith("v") and len(o) > 1 and re.fullmatch(r'v[\w#@$]+', o, re.I):
+            if lo.startswith("v") and len(o) > 1 and re.fullmatch(r'v[\w#@$]+', o, re.I) \
+                    and lo not in ("vertical", "vscroll"):
                 var = o[1:]
                 keep.append("v" + var)
             elif lo.startswith("g") and len(o) > 1 and not lo.startswith(("gray",)) and re.fullmatch(r'g\S+', o, re.I) \
@@ -326,6 +333,8 @@ class V1Gui:
             elif lo in ("group", "+group"):
                 group = True
                 keep.append(o)
+            elif lo in ("checkedgray", "+checkedgray"):
+                keep.append("Checked-1")
             else:
                 keep.append(o)
         txt = text if isinstance(text, AhkObject) else S(text)
@@ -333,12 +342,15 @@ class V1Gui:
             d = w.delimiter
             items = txt.split(d) if txt else []
             choose = None
+            chosen = []         # a multi-select ListBox may preselect several items
             clean = []
             i = 0
             while i < len(items):
                 it = items[i]
-                if it == "" and clean and choose is None:
-                    choose = len(clean)
+                if it == "" and clean and (not chosen or chosen[-1] != len(clean)):
+                    chosen.append(len(clean))
+                    if choose is None:
+                        choose = len(clean)
                     i += 1
                     continue
                 if it != "" or i < len(items) - 1:
@@ -354,6 +366,9 @@ class V1Gui:
         except AhkThrow:
             raise
         c = Ctl(w, obj, t, var, glabel, altsubmit)
+        if t == "listbox" and t in LIST_TYPES and isinstance(txt, AhkArray):
+            for n in chosen[1:] if 'chosen' in locals() else ():
+                quiet_call(M, obj, "Choose", n)
         if t == "radio":
             if group or w.prev_type != "radio" or w.radio_start is None:
                 w.radio_start = c
@@ -404,9 +419,11 @@ class V1Gui:
                  "picture": ["Click", "DoubleClick"], "link": ["Click"], "listbox": ["Change", "DoubleClick"],
                  "listview": ["Click", "DoubleClick", "ColClick", "ContextMenu"],
                  "treeview": ["ItemSelect", "Click", "DoubleClick", "ContextMenu"]}.get(t, ["Change"])
+        c.handlers = {}
         for k in kinds:
+            h = c.handlers[k] = mk(k)
             try:
-                M(c.obj, "OnEvent", k, mk(k))
+                M(c.obj, "OnEvent", k, h)
             except AhkThrow:
                 pass
 
@@ -420,7 +437,14 @@ class V1Gui:
         t = c.type
         try:
             if t in LIST_TYPES and not c.altsubmit:
-                return P(c.obj, "Text")
+                v = P(c.obj, "Text")
+                if isinstance(v, AhkArray):          # multi-select ListBox
+                    return c.gui.delimiter.join(S(x) for x in v.items)
+                return v
+            if t in LIST_TYPES and c.altsubmit:
+                v = P(c.obj, "Value")
+                if isinstance(v, AhkArray):
+                    return c.gui.delimiter.join(S(x) for x in v.items)
             if t == "radio":
                 return P(c.obj, "Value")
             if t in ("listview", "treeview"):
@@ -488,10 +512,15 @@ class V1Gui:
                 SETP(o, "Visible", int(low == "show"))
                 return
             if low in ("choose", "choosestring"):
-                if low == "choose":
-                    M(o, "Choose", I(v))
-                else:
-                    M(o, "Choose", S(v))
+                sv = S(v)
+                fire = len(sv) - len(sv.lstrip("|"))      # |N runs the g-label, ||N as a double-click
+                sv = sv.lstrip("|")
+                M(o, "Choose", I(sv) if low == "choose" else sv)
+                if fire and c.glabel:
+                    kind = "DoubleClick" if fire > 1 and "DoubleClick" in c.handlers else \
+                        "Change" if "Change" in c.handlers else next(iter(c.handlers), None)
+                    if kind:
+                        c.handlers[kind].call([o, 0])
                 return
             if low == "font":
                 return

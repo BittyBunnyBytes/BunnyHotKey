@@ -367,7 +367,7 @@ class Compiler:
             return s
         if kind in ("global", "static"):
             cell = ref
-            if cell.scope == "const":
+            if cell.scope == "const" and not (self.v1 and name.lower() not in self.builtin_consts):
                 def ro(f, v):
                     throw("Error", "This variable is read-only.", name)
                 return ro
@@ -705,10 +705,14 @@ class Compiler:
         if op == "+":
             return lambda f: rt.to_num(x(f))
         if op == "~":
+            v1 = self.v1
+
             def bitnot(f):
                 v = rt.to_num(x(f))
                 if type(v) is not int:
                     throw("TypeError", type_error_msg("Integer", v), value_text(v))
+                if v1 and 0 <= v <= 0xFFFFFFFF:
+                    return ~v & 0xFFFFFFFF      # v1: 32-bit unsigned for values in UInt range
                 return ~v
             return bitnot
         raise AssertionError(op)
@@ -1084,8 +1088,12 @@ class Compiler:
                 return v
             return cc
 
+        v1 = self.v1
+
         def comp(f):
             cur = getter(f)
+            if v1 and (cur == "" or cur is UNSET):
+                cur = 0                 # v1: compound assignment treats a blank variable as 0
             v = arith(rt, binop, cur, val(f))
             setter(f, v)
             return v
@@ -1141,8 +1149,16 @@ class Compiler:
         else:
             raise AhkSyntaxError("Invalid ++/-- target", e.file, e.line)
 
+        v1 = self.v1
+
         def incdec(f):
             cur = getter(f)
+            if v1 and type(cur) is not int:
+                if cur == "" or cur is UNSET:
+                    cur = 0             # v1: ++/-- treat a blank variable as 0
+                elif type(cur) is not float and str_to_number(cur) is None:
+                    setter(f, "")       # non-numeric -> blank, as v1's math does
+                    return ""
             if type(cur) is int:
                 new = wrap(cur + delta)
                 old = cur
@@ -1412,10 +1428,11 @@ class Compiler:
         final = self.compile_body(s.final, scope) if s.final is not None else None
         bare_try = not s.catches and s.final is None
         err_proto = lambda: CLASSES["Error"].prototype
+        v1 = self.v1
 
         def matches(f, value, cls_fns):
             if not cls_fns:
-                return isinstance(value, AhkObject) and value.has_base(err_proto())
+                return v1 or isinstance(value, AhkObject) and value.has_base(err_proto())   # v1's catch takes any value
             for cf in cls_fns:
                 c = cf(f)
                 p = c.own("Prototype") if isinstance(c, AhkObject) else None
@@ -1444,7 +1461,7 @@ class Compiler:
                             cbody(f)
                             break
                     else:
-                        if bare_try and isinstance(value, AhkObject) and value.has_base(err_proto()):
+                        if bare_try and (v1 or isinstance(value, AhkObject) and value.has_base(err_proto())):
                             return
                         raise
                     return

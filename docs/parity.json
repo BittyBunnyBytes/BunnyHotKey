@@ -108,13 +108,13 @@
       },
       {
         "area": "v1 language (If var =, Gosub, objects)",
-        "percent": 85,
-        "note": "legacy If, Gosub/Goto, ErrorLevel, classes"
+        "note": "{passed} of {count} checks (tests/v1conf)",
+        "measure": "v1:language"
       },
       {
         "area": "v1 Gui (Gui, GuiControl, LV_/TV_/SB_)",
-        "percent": 75,
-        "note": "g-labels, v-vars, Submit, ListView/TreeView"
+        "note": "{passed} of {count} checks (tests/v1conf)",
+        "measure": "v1:gui"
       }
     ]
   }

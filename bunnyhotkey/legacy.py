@@ -89,7 +89,7 @@ FUNCS = {
     'comobjmissing': ('__v1_ComObjMissing', ()), 'comobjenwrap': ('ComObjFromPtr', ()),
     'comobjunwrap': ('ComObjValue', ()), 'asc': ('Ord', ()), 'onmessage': ('__v1_OnMessage', ()),
     'registercallback': ('__v1_RegisterCallback', ()), 'isbyref': ('__v1_IsByRef', (0,)),
-    'getkeystate': ('__v1_GetKeyState', ()), 'isobject': ('__v1_IsObject', ()),
+    'getkeystate': ('__v1_GetKeyStateFn', ()), 'isobject': ('__v1_IsObject', ()),
     'objinsert': ('__v1_ObjInsert', ()), 'objinsertat': ('__v1_ObjInsertAt', ()), 'objpush': ('__v1_ObjPush', ()),
     'objpop': ('__v1_ObjPop', ()), 'objremove': ('__v1_ObjRemove', ()), 'objremoveat': ('__v1_ObjRemoveAt', ()),
     'objdelete': ('__v1_ObjDelete', ()), 'objminindex': ('__v1_ObjMinIndex', ()),
@@ -137,6 +137,14 @@ V2_RESERVED = {"and", "or", "not", "is", "in", "contains", "as", "if", "else", "
                "try", "catch", "finally", "return", "break", "continue", "goto", "throw", "global", "local",
                "static", "class", "switch", "case", "default", "super", "unset", "this", "isset"}
 
+V1_DIRECTIVES = {
+    'allowsamelinecomments', 'clipboardtimeout', 'commentflag', 'delimiter', 'derefchar', 'errorstdout', 'escapechar',
+    'hotkeyinterval', 'hotkeymodifiertimeout', 'hotstring', 'if', 'iftimeout', 'ifwinactive', 'ifwinexist',
+    'ifwinnotactive', 'ifwinnotexist', 'include', 'includeagain', 'inputlevel', 'installkeybdhook', 'installmousehook',
+    'keyhistory', 'ltrim', 'maxhotkeysperinterval', 'maxmem', 'maxthreads', 'maxthreadsbuffer', 'maxthreadsperhotkey',
+    'menumaskkey', 'noenv', 'notrayicon', 'persistent', 'requires', 'singleinstance', 'usehook', 'warn',
+    'winactivateforce', 'dllload', 'hotif', 'hotiftimeout', 'suspendexempt'}
+
 TIME_UNITS = {'seconds', 'second', 's', 'minutes', 'minute', 'm', 'hours', 'hour', 'h', 'days', 'day', 'd'}
 
 LEGACY_IF_OPS = ('<>', '!=', '>=', '<=', '=', '>', '<')
@@ -146,7 +154,7 @@ NAME = r'[\w#@$\u0080-￿]'
 
 # ================================================================ line reader
 
-def _strip_comment(s):
+def _strip_comment(s, flag=';'):
     i = 0
     n = len(s)
     while i < n:
@@ -154,10 +162,25 @@ def _strip_comment(s):
         if c == ESC:
             i += 2
             continue
-        if c == ';' and (i == 0 or s[i - 1] in ' \t'):
+        if s.startswith(flag, i) and (i == 0 or s[i - 1] in ' \t'):
             return s[:i].rstrip(' \t')
         i += 1
     return s
+
+
+def _to_backtick(s, esc):
+    """Rewrite a line written with #EscapeChar `esc` to use the standard backtick."""
+    out = []
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if c == esc and i + 1 < n:
+            out.append(ESC + s[i + 1] if s[i + 1] != esc else esc)
+            i += 2
+            continue
+        out.append(ESC + ESC if c == ESC else c)
+        i += 1
+    return ''.join(out)
 
 
 _CONT_START = re.compile(r'(,|\.(?!\w*\s*:=)|&&|\|\||and\b|or\b|\?|:(?!:)|\+(?!\+)|-(?!-)|\*|/|<|>|=|~|&|\||\^)', re.I)
@@ -172,6 +195,7 @@ def logical_lines(text, filename, ltrim_default=False):
     i = 0
     n = len(raw)
     in_comment = False
+    syntax = {'flag': ';', 'esc': ESC}
 
     def code_line(j):
         """(text, next index) of the next non-comment line starting at j, or (None, n)."""
@@ -179,6 +203,15 @@ def logical_lines(text, filename, ltrim_default=False):
         while j < n:
             s = raw[j].strip(' \t')
             j += 1
+            m = re.match(r'#(CommentFlag|EscapeChar)\s*,?\s*(\S+)', s, re.I)
+            if m and not in_comment:
+                syntax['flag' if m[1].lower() == 'commentflag' else 'esc'] = m[2] if m[1].lower() == 'commentflag' else m[2][0]
+                continue
+            if syntax['esc'] != ESC:
+                s = _to_backtick(s, syntax['esc'])
+            flag = syntax['flag']
+            if flag != ';' and not in_comment and s.startswith(flag):
+                continue
             if in_comment:
                 if s.startswith('*/') or s.endswith('*/'):
                     in_comment = False
@@ -191,9 +224,9 @@ def logical_lines(text, filename, ltrim_default=False):
                 if not (s.endswith('*/') and len(s) >= 4):
                     in_comment = True
                 continue
-            if s.startswith(';'):
+            if flag == ';' and s.startswith(';'):
                 continue
-            s = _strip_comment(s)
+            s = _strip_comment(s, flag)
             if s:
                 return s, j
         return None, n
@@ -460,8 +493,10 @@ class Expr:
                 continue
             if k == 'num':
                 p = self.prev(toks, i)
-                if ('.' in v or 'e' in v.lower()) and not v.lower().startswith('0x') and not (p and p.v == '.'):
-                    out.append('"' + v + '"')   # v1 keeps a literal float's text
+                q = self.nxt(toks, i, end)
+                key = (p is not None and p.v in ('[', ',')) or (q < end and toks[q].v == ':')
+                if ('.' in v or 'e' in v.lower() or v.lower().startswith('0x')) and not (p and p.v == '.') and not key:
+                    out.append('"' + v + '"')   # v1 keeps a literal float's / hex number's text
                 else:
                     out.append(v)
                 i += 1
@@ -489,8 +524,12 @@ class Expr:
                         i = j2
                     continue
                 if member:
-                    if self.tr.in_class and low == 'base' and False:
-                        pass
+                    if low == 'next' and after is not None and after.v == '(' and j == i + 1:
+                        # enumerator.Next(Key, Value): both parameters are ByRef in v1
+                        close = self.match(toks, j, end)
+                        out.append(self.name(v, True) + '(' + self.args(toks, j + 1, close, (0, 1)) + ')')
+                        i = close + 1
+                        continue
                     out.append(self.name(v, True))
                     i += 1
                     continue
@@ -966,6 +1005,8 @@ class Translator:
             if arg.lower().startswith('endchars'):
                 return self.emit('#Hotstring EndChars ' + arg[8:].strip())
             return self.emit('#Hotstring ' + arg)
+        if name not in V1_DIRECTIVES:
+            return self.statement(t, top=True)   # v1: an unrecognized "#name" line is ordinary code
         return self.emit('#' + m[1] + (' ' + arg if arg else ''))
 
     def hot(self, hot, t):

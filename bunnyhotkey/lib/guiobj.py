@@ -170,7 +170,7 @@ class CtrlObj(AhkObject):
     __slots__ = ("cid", "gui", "ctype", "name", "events", "x", "y", "w", "h", "rows", "altsubmit", "group",
                  "enabled", "visible", "tab", "buddy", "multi", "readonly", "password", "sized", "font",
                  "dtformat", "imagelist", "color", "bg", "header", "exstyle", "_com", "custom",
-                 "command_cbs", "notify_cbs", "vertical")
+                 "command_cbs", "notify_cbs", "vertical", "sorted")
 
     def __init__(self, gui, ctype):
         super().__init__(CLASSES["Gui." + CLASS_OF.get(ctype, "Text")].prototype)
@@ -202,6 +202,7 @@ class CtrlObj(AhkObject):
         self.command_cbs = {}       # OnCommand: notification code -> callbacks
         self.notify_cbs = {}        # OnNotify
         self.vertical = False
+        self.sorted = False
 
 
 def _srv():
@@ -449,6 +450,9 @@ def gui_add(this, ctype, options="", text=UNSET):
     if t in ("DDL", "ComboBox", "ListBox", "Tab") and not items and txt:
         items = txt.split("|")
         txt = ""
+    ctrl.sorted = bool(flags.get("sort")) and t in ("DDL", "ComboBox", "ListBox")
+    if ctrl.sorted:
+        items = sorted(items, key=str.lower)        # CBS_SORT / LBS_SORT
     passthru = {k: v for k, v in flags.items() if k not in ("name", "altsubmit", "section")}
     send.update(text=txt, items=items, **passthru)
     ctrl.altsubmit = bool(flags.get("altsubmit"))
@@ -927,6 +931,16 @@ def _opt_str(v):
     return S(v) if v is not UNSET else ""
 
 
+def _list_add(this, items):
+    new = [S(i) for i in items.items]
+    if getattr(this, "sorted", False):
+        cur = _srv().call("query", ctrl=this.cid, what="items")
+        _srv().call("items", ctrl=this.cid, clear=True)
+        new = sorted(list(cur) + new, key=str.lower)
+    _srv().call("items", ctrl=this.cid, add=new)
+    return ""
+
+
 def _list_delete(this, n=UNSET):
     if n is UNSET or n == "":
         _srv().call("items", ctrl=this.cid, clear=True)
@@ -1047,7 +1061,7 @@ def setup():
     method(cp, "SetFont", lambda this, opts="", name=UNSET: ctrl_setfont(this, opts, name))
     method(cp, "Redraw", lambda this: "")
     lp = CLASSES["Gui.List"].prototype
-    method(lp, "Add", lambda this, items: _srv().call("items", ctrl=this.cid, add=[S(i) for i in items.items]) and "")
+    method(lp, "Add", _list_add)
     method(lp, "Delete", lambda this, n=UNSET: _list_delete(this, n))
     method(lp, "Choose", lambda this, v: _list_choose(this, v))
     tb = CLASSES["Gui.Tab"].prototype

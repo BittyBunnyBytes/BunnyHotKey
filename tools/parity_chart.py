@@ -93,6 +93,11 @@ def measure_v1(what):
         ok = sum(subprocess.run([sys.executable, "-m", "bunnyhotkey", "--console", "--backend=null", "--validate",
                                  os.path.join(d, f)], cwd=ROOT, capture_output=True).returncode == 0 for f in files)
         return (round(100 * ok / len(files)) if files else 0), {"loaded": ok, "total": len(files)}
+    if what in ("language", "gui"):
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import v1_conformance
+        ok, n = v1_conformance.run(what)
+        return (round(100 * ok / n) if n else 0), {"passed": ok, "count": n}
     from bunnyhotkey.legacy import COMMANDS
     names = [l.strip() for l in open(os.path.join(ROOT, "tools", "ahk_v1_commands.txt")) if l.strip() and not l.startswith("#")]
     supported = set(COMMANDS) | {"mousegetpos"}
@@ -176,9 +181,10 @@ def main():
     summary = (f"**In short:** the AutoHotkey v2 *language* is essentially complete ({lang}%), and\n"
                f"**{api}% of its built-in function API** is reproduced ({allv['full']} full, {allv['partial']} partial, "
                f"{allv['missing']} missing).\n"
-               + (f"**AutoHotkey v1:** common hotkey scripts run through a compatibility frontend "
-                  f"({values.get(data['v1']['areas'][0]['area'], 0)}% of the v1 test scripts load); "
-                  f"see [docs/V1.md](docs/V1.md).\n" if data.get("v1") else "")
+               + (f"**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - "
+                  + ", ".join(f"{a['area'].split(' (')[0].replace('v1 ', '', 1)} {values.get(a['area'], 0)}%"
+                              for a in data["v1"]["areas"][1:])
+                  + "; see [docs/V1.md](docs/V1.md).\n" if data.get("v1") else "")
                + "\n**Missing or left to do:**\n"
                + "\n".join(f"- {m}" for m in data["missing"])
                + "\n\nThe full breakdown is in [docs/PARITY.md](docs/PARITY.md).")

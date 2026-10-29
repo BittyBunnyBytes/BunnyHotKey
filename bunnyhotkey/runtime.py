@@ -66,13 +66,14 @@ class UserFunc(FuncBase):
 
 
 class Frame:
-    __slots__ = ("cells", "free", "func", "this", "args", "dyn")
+    __slots__ = ("cells", "free", "func", "this", "args", "dyn", "aliased")
 
     def __init__(self, cells, free, func):
         self.cells = cells
         self.free = free
         self.func = func
         self.dyn = None
+        self.aliased = None
 
 
 class CParam:
@@ -129,6 +130,10 @@ class CompiledFunc:
                 continue
             if p.byref and type(v) is VarRef:
                 cells[p.slot] = v.cell
+                if rt.v1:
+                    if frame.aliased is None:
+                        frame.aliased = set()
+                    frame.aliased.add(id(v.cell))      # for v1's IsByRef()
             else:
                 cells[p.slot].value = v
         if self.variadic_slot is not None:
@@ -501,6 +506,12 @@ class Runtime:
     def get_prop(self, obj, name, args=(), start=None, this=None):
         if this is None:
             this = obj
+        if self.v1 and start is None and not args and len(name) in (4, 7) and isinstance(obj, AhkObject):
+            low = name.lower()
+            if low == "base":
+                return self.v1_base(obj)            # an instance's base is its class in v1
+            if low == "__class" and isinstance(obj, AhkClass):
+                return obj.name
         p, owner = start.find(name) if start is not None else self.find_prop(obj, name)
         if p is not None:
             if p.is_value:
