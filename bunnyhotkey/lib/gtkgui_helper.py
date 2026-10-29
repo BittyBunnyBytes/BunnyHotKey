@@ -1383,6 +1383,14 @@ def make(win, cid, t, opts):
                              step_increment=1 if lo <= hi else -1, page_increment=10)
         w = Gtk.SpinButton(adjustment=adj, climb_rate=1, digits=0)
         w.set_wrap(bool(opts.get("wrap")))
+        if not opts.get("0x80"):
+            # the buddy shows thousands separators unless UDS_NOTHOUSANDS (0x80) is given, as on Windows
+            w.connect("output", lambda sp: (sp.set_text(f"{int(sp.get_adjustment().get_value()):,}"), True)[1])
+            strip = lambda sp, *_: (sp.set_text(sp.get_text().replace(",", "")) if "," in sp.get_text() else None,
+                                    False)[1]
+            w.connect("activate", strip)
+            w.connect("focus-out-event", strip)
+            w.set_text(f"{int(adj.get_value()):,}")
         w.connect("value-changed", lambda *_: ev(cid, "Change", 0, always=True))
         if b is not None:
             old = b["w"]

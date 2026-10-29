@@ -210,6 +210,9 @@ def gui_new(this, options="", title=UNSET, event_obj=UNSET):
     this.event_obj = event_obj if event_obj is not UNSET else None
     this.xid = _srv().call("new", win=this.wid, title=this.title, resize=False) or 0
     GUIS[this.wid] = this
+    if this.xid:
+        from .ipc import claim_window
+        claim_window(this.xid)
     rt().gui_count = getattr(rt(), "gui_count", 0) + 1
     if S(options):
         gui_opt(this, options)

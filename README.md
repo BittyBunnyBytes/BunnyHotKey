@@ -22,7 +22,7 @@
 - **Wayland input:** dropped for now.
 - **Other apps' controls:** `Control*`, `WinGetText` and `MenuSelect` work fully on BHK's own Gui windows, but X11 doesn't expose other programs' widgets (AT-SPI could).
 - **Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
-- **Window messages between processes:** `SendMessage`/`PostMessage`/`OnMessage` reach the script's own windows and controls.
+- **Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`); X11 programs have no Win32 message queue to receive them.
 
 The full breakdown is in [docs/PARITY.md](docs/PARITY.md).
 <!-- parity:summary:end -->
@@ -90,7 +90,9 @@ bhk doctor                 # what BHK can use on this machine
   - `CallbackCreate` gives real native function pointers, so Linux libraries (e.g. libc's `qsort`) can call
     back into the script; `DllCall` also calls by address and `NumGet`/`StrGet` read native pointers.
   - `ObjPtr`/`ObjFromPtr`/`ObjAddRef`/`ObjRelease`, `StrPtr`, `OnMessage` with `SendMessage`/`PostMessage`,
-    `KeyHistory`, `ListVars`, `ListHotkeys` and `#InstallKeybdHook` all work.
+    `KeyHistory`, `ListLines`, `ListVars`, `ListHotkeys` and `#InstallKeybdHook` all work.
+  - Every script has AutoHotkey's hidden main window (`A_ScriptHwnd`, `ahk_class AutoHotkey`), so scripts can
+    find each other and exchange `WM_COPYDATA`, or exit/reload/pause each other with `WM_COMMAND`.
 - **Input (X11):**
   - Hotkeys (modifiers, `~ * $ up`, `a & b`, remaps `a::b`, `#HotIf`) and hotstrings (all options).
   - Send/SendInput/SendText with full syntax, Click, MouseMove and friends.

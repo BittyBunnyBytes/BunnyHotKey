@@ -264,19 +264,46 @@ def _show_main(title, text):
 
 @export()
 def ListLines(mode=UNSET):
-    """Line logging on/off; returns the previous setting.  (Executed lines are not recorded, so the window only
-    says so.)"""
+    """Line logging on/off for the current thread; returns the previous setting.  Without a parameter, shows the
+    last 400 executed lines (script2.cpp ListLines, script.cpp Line::LogToText)."""
     r = rt()
-    old = int(getattr(r.thread.settings, "list_lines", 1))
+    old = int(r.thread.settings.list_lines)
     if mode is UNSET:
-        return _show_main("Lines most recently executed",
-                          "Bunny Hot Key compiles scripts to Python closures and does not keep a log of executed "
-                          "lines.\nUse OutputDebug or FileAppend(..., \"*\") to trace execution.") and old
-    try:
-        r.thread.settings.list_lines = 1 if to_bool(mode) else 0
-    except AttributeError:
-        pass
+        _show_main("Lines most recently executed", line_log_text())
+        return old
+    if r.thread.settings.list_lines and r.line_log:
+        r.line_log.pop()          # don't clutter the history with the ListLines line itself
+    r.thread.settings.list_lines = 1 if to_bool(mode) else 0
     return old
+
+
+_SRC_CACHE: dict[str, list] = {}
+
+
+def line_log_text():
+    r = rt()
+    out = ["Script lines most recently executed (oldest first).  The seconds elapsed between a line and the one "
+           "after it is in parentheses to the right (if not 0).  The bottommost line's elapsed time is the number "
+           "of seconds since it executed.", ""]
+    entries = list(r.line_log)
+    last_file = None
+    now = time.monotonic()
+    for i, (file, line, t) in enumerate(entries):
+        if file != last_file:
+            out.append(f"---- {file}")
+            last_file = file
+        src = _SRC_CACHE.get(file)
+        if src is None:
+            try:
+                with open(file, encoding="utf-8-sig", errors="replace") as fh:
+                    src = fh.read().splitlines()
+            except OSError:
+                src = []
+            _SRC_CACHE[file] = src
+        text = src[line - 1].strip()[:200] if 0 < line <= len(src) else ""
+        elapsed = (entries[i + 1][2] if i + 1 < len(entries) else now) - t
+        out.append(f"{line:03d}: {text}" + (f" ({elapsed:.2f})" if elapsed >= 0.005 else ""))
+    return "\n".join(out)
 
 
 def _var_line(name, v):

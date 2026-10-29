@@ -387,6 +387,8 @@ class Runtime:
         self.script_path = os.path.abspath(script_path) if script_path != "*" else "*"
         self.script_args = args
         self.globals: dict[str, Cell] = {}
+        import collections
+        self.line_log = collections.deque(maxlen=400)     # ListLines (LINE_LOG_SIZE in script.h)
         self.consts: set[str] = set()        # function/class names (read-only)
         self.builtins: dict[str, BuiltinFunc] = {}
         self.bivars: dict[str, tuple] = {}   # A_ variables: name -> (getter, setter)

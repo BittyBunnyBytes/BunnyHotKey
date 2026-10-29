@@ -14,7 +14,7 @@
     {"area": "Tray icon & menu", "percent": 95, "note": "XFCE live; Cinnamon via XApp monitor"},
     {"area": "Hotkeys & hotstrings (X11)", "percent": 90, "note": "bare modifiers not suppressible"},
     {"area": "All built-in functions", "measure": "builtins:all", "note": "{full} full, {partial} partial, {missing} missing"},
-    {"area": "Gui", "percent": 92, "note": "21 of 23 control types (not ActiveX/Custom)"},
+    {"area": "Gui", "percent": 93, "note": "21 of 23 control types (not ActiveX/Custom)"},
     {"area": "Win32 controls (Control*, Edit*)", "note": "full on own Gui; other apps hidden by X11", "percent": 60},
     {"area": "COM / ActiveX", "percent": 0, "note": "Windows-only"},
     {"area": "Wayland input", "percent": 0, "note": "dropped for now"}
@@ -24,6 +24,6 @@
     "**Wayland input:** dropped for now.",
     "**Other apps' controls:** `Control*`, `WinGetText` and `MenuSelect` work fully on BHK's own Gui windows, but X11 doesn't expose other programs' widgets (AT-SPI could).",
     "**Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.",
-    "**Window messages between processes:** `SendMessage`/`PostMessage`/`OnMessage` reach the script's own windows and controls."
+    "**Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`); X11 programs have no Win32 message queue to receive them."
   ]
 }

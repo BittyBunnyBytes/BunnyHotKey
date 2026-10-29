@@ -243,6 +243,8 @@ class Program:
         except AhkSyntaxError as e:
             self.load_error(e)
             return 2
+        from .lib import ipc
+        ipc.create_main_window()          # A_ScriptHwnd: hidden "AutoHotkey" window, messages from other scripts
         if getattr(rt, "want_hook", False):
             from .lib.flow import _install_hook
             _install_hook(1)          # #InstallKeybdHook / #InstallMouseHook

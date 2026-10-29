@@ -1597,15 +1597,28 @@ def _builtin_message(c, win, msg, wp, lp):
     return False, 0
 
 
-def _deliver(msg, wp, lp, c, win, sync):
+def _deliver(msg, wp, lp, c, win, sync, timeout=5.0):
     from .flow import message_handlers
     from .guiobj import gui_for_window
-    hwnd = c.cid if c is not None else win
-    ours = c is not None or gui_for_window(win) is not None or (win and win == getattr(rt(), "script_hwnd", 0))
-    handled, result = _builtin_message(c, win, msg, wp, lp)
-    if not ours:
-        return result
+    from . import ipc
     r = rt()
+    hwnd = c.cid if c is not None else win
+    main = bool(win) and win == getattr(r, "script_hwnd", 0) and c is None
+    ours = c is not None or gui_for_window(win) is not None or main
+    if not ours:
+        d = _dpy()
+        pid = pid_of(d, win) if d is not None and win else 0
+        if pid and pid != os.getpid():
+            delivered, result = ipc.send(pid, msg, wp, lp, win, sync, timeout)
+            if delivered:
+                return result
+        return _builtin_message(c, win, msg, wp, lp)[1]
+    if main and msg in (ipc.WM_CLOSE, ipc.WM_COMMAND) and not message_handlers(msg):
+        if sync:
+            return ipc.main_window_default(msg, wp)
+        r.post(lambda: ipc.main_window_default(msg, wp))
+        return 0
+    handled, result = _builtin_message(c, win, msg, wp, lp)
     for fn in message_handlers(msg):
         if sync:
             res = r.call(fn, [wp, lp, msg, hwnd])
@@ -1626,7 +1639,8 @@ def PostMessage(msg, wparam=0, lparam=0, control=UNSET, t=UNSET, txt=UNSET, xt=U
 @export()
 def SendMessage(msg, wparam=0, lparam=0, control=UNSET, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET, timeout=5000):
     c, win = _msg_target(control, t, txt, xt, xx)
-    return _deliver(rt().to_int(msg), _num_arg(wparam), _num_arg(lparam), c, win, True)
+    ms = rt().to_int(timeout) if timeout not in (UNSET, "") else 5000
+    return _deliver(rt().to_int(msg), _num_arg(wparam), _num_arg(lparam), c, win, True, ms / 1000 if ms > 0 else None)
 
 
 # ---------------------------------------------------------------- pixels

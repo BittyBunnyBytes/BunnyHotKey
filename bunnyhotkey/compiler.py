@@ -6,6 +6,8 @@ functions capture enclosing locals as closures; `static` cells persist.
 """
 from __future__ import annotations
 
+import time
+
 import re
 
 from . import ast as A
@@ -1119,9 +1121,14 @@ class Compiler:
         line = s.line
         file = s.file or rt.file
 
+        log = rt.line_log
+        mono = time.monotonic
+
         def stmt(f):
             rt.line = line
             rt.file = file
+            if rt.thread.settings.list_lines:
+                log.append((file, line, mono()))
             if rt.pending:
                 rt.check_interrupts()
             fn(f)
