@@ -20,6 +20,21 @@ def main():
         print("skipped: no DISPLAY")
         return 0
     failed = 0
+    # another program's controls through AT-SPI: a plain GTK app stands in for "some other application"
+    app = subprocess.Popen([sys.executable, os.path.join(HERE, "live", "foreign_app.py")], cwd=ROOT,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        import time
+        time.sleep(1.5)
+        r = subprocess.run([sys.executable, "-m", "bunnyhotkey", "--console",
+                            os.path.join(HERE, "live", "x11_foreign_controls.ahk")],
+                           cwd=ROOT, capture_output=True, text=True, timeout=60)
+        want = open(os.path.join(HERE, "live", "x11_foreign_controls.expected")).read()
+        ok = r.stdout + r.stderr == want
+        print(("PASS " if ok else "FAIL ") + "x11_foreign_controls.ahk" + ("" if ok else ":\n" + r.stdout + r.stderr))
+        failed += not ok
+    finally:
+        app.terminate()
     for name, want in EXPECT.items():
         r = subprocess.run([sys.executable, "-m", "bunnyhotkey", "--console", os.path.join(HERE, "live", name)],
                            cwd=ROOT, capture_output=True, text=True, timeout=30)

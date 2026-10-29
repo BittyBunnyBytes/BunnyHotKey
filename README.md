@@ -20,7 +20,7 @@
 **Missing or left to do:**
 - **COM/ActiveX:** Windows-only (`ComObject`, the Gui ActiveX control, `SoundGetInterface`).
 - **Wayland input:** dropped for now.
-- **Other apps' controls:** `Control*`, `WinGetText` and `MenuSelect` work fully on BHK's own Gui windows, but X11 doesn't expose other programs' widgets (AT-SPI could).
+- **Other apps' controls:** read, typed into, clicked, checked and chosen through AT-SPI, but they can't be moved, hidden or restyled, and apps that don't publish accessibility data (Qt without `QT_ACCESSIBILITY=1`, Chromium without its accessibility flag) stay opaque.
 - **Windows DLLs:** DllCall emulates the common Win32 APIs and calls any Linux `.so` (with callbacks), not arbitrary Windows DLLs.
 - **Window messages to non-BHK programs:** messages between BHK scripts work (hidden `AutoHotkey` main window, `WM_COPYDATA`, `WM_COMMAND`); X11 programs have no Win32 message queue to receive them.
 
@@ -111,7 +111,7 @@ bhk doctor                 # what BHK can use on this machine
   - `Gui()` with 21 of AutoHotkey's 23 control types: Text, Edit, Button, CheckBox, Radio, DropDownList, ComboBox, ListBox, ListView, TreeView, Tab/Tab2/Tab3, UpDown, Hotkey, DateTime, MonthCal, Slider, Progress, GroupBox, Picture, Link and StatusBar. (ActiveX and Custom host Win32 components and can't exist on Linux.)
   - AHK layout options and events, `SetFont`, `BackColor`, control colours, `Gui.Opt` (AlwaysOnTop, -Caption, ToolWindow, Owner, MinSize...), ListView sorting/columns/checkboxes/icons, image lists, `ContextMenu` and `DropFiles`.
   - `Menu` with submenus, radio items, icons and colours, plus `Gui.MenuBar`.
-  - `Control*`, `Edit*`, `ListViewGetContent`, `StatusBarGetText`, `WinGetText`, `WinGetControls` and `MenuSelect` work on the script's own Gui windows (by object, Hwnd, ClassNN such as `Edit1`, or text), like on Windows.
+  - `Control*`, `Edit*`, `ListViewGetContent`, `StatusBarGetText`, `WinGetText`, `WinGetControls` and `MenuSelect` work on the script's own Gui windows (by object, Hwnd, ClassNN such as `Edit1`, or text), like on Windows, and on other programs' windows through AT-SPI (e.g. `ControlGetText("Edit1", "ahk_exe gedit")`, `ControlClick("OK", "Save As")`).
 - **Tray icon, like AutoHotkey on Windows:**
   - Every persistent script gets the pink tray icon, with the script name as its tooltip.
   - The standard menu: **Open** (bold default, double-click), Help, Window Spy, Reload Script, Edit Script, Suspend Hotkeys and Pause Script (both with check marks), Exit.
@@ -133,7 +133,7 @@ bhk doctor                 # what BHK can use on this machine
 - **Wayland:** dropped for now. Hotkeys and Send need X11, although XWayland apps still work from an X11 session.
 - **AutoHotkey v1 scripts:** BHK targets v2. A v1 `#Requires` gets a clear message.
 - **COM/ActiveX, and Windows-only APIs that aren't in the DllCall table.**
-- **Other programs' controls:** X11 doesn't expose another app's widgets the way Win32 does, so `ControlGetText` and similar act on the whole window there.
+- **Moving or restyling other programs' controls:** other apps' widgets are read and operated through the accessibility bus (AT-SPI), which has no way to move, hide or restyle them. Apps that don't publish accessibility data (e.g. Qt without `QT_ACCESSIBILITY=1`) stay opaque.
 
 ## Note for agents
 If you are an AI agent trying to use this project, these are the facts you need:

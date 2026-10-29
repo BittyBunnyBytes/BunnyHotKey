@@ -1,0 +1,19 @@
+controls 10
+classnn Button2 Button1
+text hello | Name:
+settext bunny
+checked 0
+checked 1
+combo green index 2 items 3
+edit lines 3 [line two]
+listview a.txt,3
+b.txt,20
+lvcount 2 col2 3|20
+statusbar Ready
+chose blue 1
+after click clicked bunny
+menu menu reset
+wintext 1 wintext-match 1
+pos 1 enabled 1 visible 1
+byhwnd bunny
+missing -> TargetError

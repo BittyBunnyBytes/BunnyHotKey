@@ -233,8 +233,10 @@ def window_matches(d, w, c: Criteria, mode=None) -> bool:
         if not any(window_matches(d, w, g) for g in crits):
             return False
     if c.text or c.ex_text:
-        # WinText: only this script's own Gui windows expose control text on X11
+        # WinText: this script's Gui windows directly, other programs' through AT-SPI
         texts = _gui_texts(w)
+        if texts is None:
+            texts = _foreign_texts(w)
         if texts is not None:
             if c.text and not any(_str_match(c.text, x, mode) for x in texts):
                 return False
@@ -552,8 +554,29 @@ def _gui_texts(win, hidden=None):
 
 @export()
 def WinGetText(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    texts = _gui_texts(_win_arg(t, txt, xt, xx))
+    win = _win_arg(t, txt, xt, xx)
+    texts = _gui_texts(win)
+    if texts is None:
+        texts = _foreign_texts(win)
     return "".join(x + "\r\n" for x in texts) if texts else ""
+
+
+def _foreign_texts(win):
+    cs = _foreign_window(win) or []
+    hidden = rt().thread.settings.detect_hidden_text
+    out = []
+    for f in cs:
+        if f.role in ("table", "tree table", "tree", "list", "list box", "scroll bar", "slider", "progress bar"):
+            continue
+        if not hidden and not f.visible():
+            continue
+        try:
+            v = f.text()
+        except Exception:
+            continue
+        if v:
+            out.append(v)
+    return out
 
 
 def _gui_ctrls(t, txt, xt, xx):
@@ -564,12 +587,19 @@ def _gui_ctrls(t, txt, xt, xx):
 
 @export()
 def WinGetControls(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
-    from .guiobj import classnn
+    from .guiobj import classnn, gui_for_window
+    win = _win_arg(t, txt, xt, xx)
+    if gui_for_window(win) is None:
+        return AhkArray(None, [f.classnn for f in _foreign_window(win) or []])
     return AhkArray(None, [classnn(c) for c in _gui_ctrls(t, txt, xt, xx)])
 
 
 @export()
 def WinGetControlsHwnd(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
+    from .guiobj import gui_for_window
+    win = _win_arg(t, txt, xt, xx)
+    if gui_for_window(win) is None:
+        return AhkArray(None, [f.hwnd for f in _foreign_window(win) or []])
     return AhkArray(None, [c.cid for c in _gui_ctrls(t, txt, xt, xx)])
 
 
@@ -1106,6 +1136,10 @@ def ControlGetFocus(t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     g = gui_for_window(win)
     if g is not None:
         return _srv().call("focused", win=g.wid) or 0
+    from . import atspi_
+    if atspi_.available():
+        f = atspi_.focused(*_win_info(win))
+        return f.hwnd if f is not None else 0
     return win
 
 
@@ -1442,7 +1476,9 @@ def _statusbar(t, txt, xt, xx):
     win = _win_arg(t, txt, xt, xx)
     g = gui_for_window(win)
     sb = next((c for c in g.ctrls if c.ctype == "StatusBar"), None) if g is not None else None
-    if sb is None and g is not None:
+    if g is None:
+        sb = next((f for f in _foreign_window(win) or [] if f.role == "status bar"), None)
+    if sb is None:
         throw("TargetError", "Target control not found.")
     return sb
 
@@ -1450,10 +1486,16 @@ def _statusbar(t, txt, xt, xx):
 @export()
 def StatusBarGetText(part=1, t=UNSET, txt=UNSET, xt=UNSET, xx=UNSET):
     sb = _statusbar(t, txt, xt, xx)
-    if sb is None:
-        return ""
     from .guiobj import sb_text
-    return sb_text(sb, rt().to_int(part) if part not in (UNSET, "") else 1)
+    return _sb_text(sb, rt().to_int(part) if part not in (UNSET, "") else 1)
+
+
+def _sb_text(sb, part):
+    from .guiobj import sb_text
+    from .atspi_ import Foreign
+    if isinstance(sb, Foreign):
+        return sb.text() if part == 1 else ""
+    return sb_text(sb, part)
 
 
 @export()
@@ -1461,7 +1503,6 @@ def StatusBarWait(bartext=UNSET, timeout=UNSET, part=1, t=UNSET, txt=UNSET, inte
     sb = _statusbar(t, txt, xt, xx)
     if sb is None:
         return 0
-    from .guiobj import sb_text
     want = S(bartext) if bartext is not UNSET else ""
     p = rt().to_int(part) if part not in (UNSET, "") else 1
     mode = rt().thread.settings.title_match_mode
@@ -1469,7 +1510,7 @@ def StatusBarWait(bartext=UNSET, timeout=UNSET, part=1, t=UNSET, txt=UNSET, inte
     end = None if timeout in (UNSET, "") else time.monotonic() + float(r.to_num(timeout))
     step = r.to_int(interval) if interval not in (UNSET, "") else 50
     while True:
-        cur = sb_text(sb, p)
+        cur = _sb_text(sb, p)
         if (cur == "" if want == "" else _str_match(want, cur, mode)):
             return 1
         if end is not None and time.monotonic() >= end:
@@ -1487,10 +1528,12 @@ def MenuSelect(t=UNSET, txt=UNSET, menu=UNSET, *rest):
     xx = UNSET
     win = _win_arg(t, txt, xt, xx)
     g = gui_for_window(win)
-    if g is None or g.menubar is None:
+    path = [S(n) for n in names if n is not UNSET and S(n) != ""]
+    if g is None:
+        return _foreign_menu_select(win, path)
+    if g.menubar is None:
         throw("TargetError", "Target menu not found.")
     m = g.menubar
-    path = [S(n) for n in names if n is not UNSET and S(n) != ""]
     for depth, name in enumerate(path):
         it = m.find_item(name, required=False)
         if it is None:
@@ -1791,3 +1834,230 @@ def SysGet(n):
         return {76: vl, 77: vt, 78: vr - vl, 79: vb - vt, 80: len(mons)}[i]
     return {0: w, 1: h, 16: w, 17: h, 43: 3, 4: 23, 5: 1, 6: 1, 7: 3, 8: 3,
             32: 8, 33: 8, 19: 1}.get(i, 0)
+
+
+# ---------------------------------------------------------------- other programs' controls (AT-SPI)
+# When the Control parameter names a control in another program's window, the functions below act on it through
+# the accessibility bus (lib/atspi_.py).  They are installed over the exported functions by _install_foreign().
+def _win_info(win):
+    d = _dpy()
+    return win, pid_of(d, win), title_of(d, win) or ""
+
+
+def _foreign(control, t, txt, xt, xx):
+    """Another program's control named by the Control parameter, or None if it is this script's (or omitted)."""
+    from .guiobj import CtrlObj, gui_for_window
+    from . import atspi_
+    if isinstance(control, CtrlObj) or control is UNSET or (isinstance(control, str) and control == ""):
+        return None
+    if isinstance(control, AhkObject):
+        try:
+            control = rt().to_int(rt().get_prop(control, "Hwnd"))
+        except Exception:
+            return None
+    if type(control) is int:
+        return atspi_.by_hwnd(control)
+    win = _win_arg(t, txt, xt, xx)
+    if gui_for_window(win) is not None:
+        return None
+    f = atspi_.find(*_win_info(win), control, rt().thread.settings.title_match_mode, _str_match) \
+        if atspi_.available() else None
+    if f is None:
+        throw("TargetError", "Target control not found.", S(control))
+    return f
+
+
+def _no_change(*_):
+    throw("OSError", "Other programs' controls can't be moved, shown, hidden or restyled on Linux "
+                     "(AT-SPI has no such operation).")
+
+
+def _f_style(f):
+    return WS_CHILD | (WS_VISIBLE if f.visible() else 0) | (0 if f.enabled() else WS_DISABLED) | \
+        (WS_TABSTOP if f.role not in ("label", "status bar", "image") else 0)
+
+
+def _f_choose_string(f, s):
+    sl = S(s).lower()
+    idx = next((i for i, it in enumerate(f.items(), 1) if it.lower().startswith(sl)), 0)
+    if not idx or not f.choose(idx):
+        throw("TargetError", "Target item not found.", S(s))
+    return idx
+
+
+def _f_find_item(f, s):
+    sl = S(s).lower()
+    idx = next((i for i, it in enumerate(f.items(), 1) if it.lower() == sl), 0)
+    if not idx:
+        throw("TargetError", "Target item not found.", S(s))
+    return idx
+
+
+def _f_line(f, n):
+    lines = f.lines()
+    i = rt().to_int(n)
+    if not 1 <= i <= len(lines):
+        throw("ValueError", "Parameter #1 of EditGetLine is invalid.", n)
+    return lines[i - 1]
+
+
+def _f_lv_content(f, options):
+    o = S(options).lower().split() if options is not UNSET else []
+    rows = f.table_rows(selected="selected" in o or "focused" in o)
+    if "count" in o:
+        return len(rows) if "col" not in o else f.n_columns()
+    col = next((int(t[3:]) - 1 for t in o if t.startswith("col") and t[3:].isdigit()), None)
+    if "focused" in o:
+        rows = rows[:1]
+    return "\n".join("\t".join(r if col is None else r[col:col + 1]) for r in rows)
+
+
+def _f_send(f, keys, raw):
+    from .input_ import send_to_window
+    f.focus()
+    send_to_window(f.win, S(keys), raw=raw)
+    return ""
+
+
+def _f_pos(f, x, y, w, h):
+    px, py, pw, ph = f.pos()
+    setref(x, px); setref(y, py); setref(w, pw); setref(h, ph)
+    return ""
+
+
+def _f_checked(f, v):
+    n = rt().to_int(v)
+    f.set_checked((not f.checked()) if n == -1 else bool(n))
+    return ""
+
+
+def _f_choose(f, n):
+    i = rt().to_int(n)
+    if not f.choose(i):
+        throw("ValueError", "Parameter #1 of ControlChooseIndex is invalid.", n)
+    return ""
+
+
+def _f_set_text(f, s):
+    if not f.set_text(S(s)):
+        throw("OSError", "The control's text can't be changed.")
+    return ""
+
+
+def _f_choice(f):
+    if f.role == "combo box":
+        return f.text()
+    i = f.index()
+    items = f.items()
+    return items[i - 1] if 0 < i <= len(items) else ""
+
+
+# function name -> (index of Control, index of WinTitle, index of ExcludeTitle, handler(f, *args))
+_FOREIGN = {
+    "ControlGetText": (0, 1, 3, lambda f, *a: f.text()),
+    "ControlSetText": (1, 2, 4, lambda f, s, *a: _f_set_text(f, s)),
+    "ControlClick": (0, 1, 6, lambda f, *a: (f.focus(), f.click(), "")[-1]),
+    "ControlFocus": (0, 1, 3, lambda f, *a: (f.focus(), "")[-1]),
+    "ControlGetHwnd": (0, 1, 3, lambda f, *a: f.hwnd),
+    "ControlGetPos": (4, 5, 7, lambda f, x, y, w, h, *a: _f_pos(f, x, y, w, h)),
+    "ControlGetVisible": (0, 1, 3, lambda f, *a: f.visible()),
+    "ControlGetEnabled": (0, 1, 3, lambda f, *a: f.enabled()),
+    "ControlGetClassNN": (0, 1, 3, lambda f, *a: f.classnn),
+    "ControlMove": (4, 5, 7, _no_change),
+    "ControlShow": (0, 1, 3, _no_change),
+    "ControlHide": (0, 1, 3, _no_change),
+    "ControlSetEnabled": (1, 2, 4, _no_change),
+    "ControlSetStyle": (1, 2, 4, _no_change),
+    "ControlSetExStyle": (1, 2, 4, _no_change),
+    "ControlAddItem": (1, 2, 4, _no_change),
+    "ControlDeleteItem": (1, 2, 4, _no_change),
+    "ControlGetStyle": (0, 1, 3, lambda f, *a: _f_style(f)),
+    "ControlGetExStyle": (0, 1, 3, lambda f, *a: 0x200 if f.role in TEXTUAL_ROLES else 0),
+    "ControlChooseIndex": (1, 2, 4, lambda f, n, *a: _f_choose(f, n)),
+    "ControlChooseString": (1, 2, 4, lambda f, s, *a: _f_choose_string(f, s)),
+    "ControlGetChecked": (0, 1, 3, lambda f, *a: f.checked()),
+    "ControlSetChecked": (1, 2, 4, lambda f, v, *a: _f_checked(f, v)),
+    "ControlGetItems": (0, 1, 3, lambda f, *a: AhkArray(None, f.items())),
+    "ControlGetChoice": (0, 1, 3, lambda f, *a: _f_choice(f)),
+    "ControlGetIndex": (0, 1, 3, lambda f, *a: f.index()),
+    "ControlFindItem": (1, 2, 4, lambda f, s, *a: _f_find_item(f, s)),
+    "ControlShowDropDown": (0, 1, 3, lambda f, *a: (f.do_action("press", "click"), "")[-1]),
+    "ControlHideDropDown": (0, 1, 3, lambda f, *a: (f.do_action("press", "click"), "")[-1]),
+    "ControlEditPaste": (1, 2, 4, lambda f, s, *a: (f.insert(S(s)), "")[-1]),
+    "ControlSend": (1, 2, 4, lambda f, k, *a: _f_send(f, k, False)),
+    "ControlSendText": (1, 2, 4, lambda f, k, *a: _f_send(f, k, True)),
+    "EditGetLineCount": (0, 1, 3, lambda f, *a: len(f.lines())),
+    "EditGetCurrentLine": (0, 1, 3, lambda f, *a: f.caret()[0]),
+    "EditGetCurrentCol": (0, 1, 3, lambda f, *a: f.caret()[1]),
+    "EditGetLine": (1, 2, 4, lambda f, n, *a: _f_line(f, n)),
+    "EditGetSelectedText": (0, 1, 3, lambda f, *a: f.seltext()),
+    "ListViewGetContent": (1, 2, 4, lambda f, o, *a: _f_lv_content(f, o)),
+}
+TEXTUAL_ROLES = {"text", "password text", "entry", "spin button", "editbar", "document frame", "terminal"}
+
+
+def _install_foreign():
+    import functools
+    from . import EXPORTS
+    g = globals()
+    for i, (name, fn, byref) in enumerate(EXPORTS):
+        spec = _FOREIGN.get(name)
+        if spec is None or getattr(fn, "_foreign", False):
+            continue
+        ci, ti, xi, handler = spec
+
+        def make(fn=fn, ci=ci, ti=ti, xi=xi, handler=handler):
+            @functools.wraps(fn)
+            def wrapper(*args):
+                a = list(args) + [UNSET] * 12
+                f = _foreign(a[ci], a[ti], a[ti + 1], a[xi], a[xi + 1])
+                return handler(f, *args) if f is not None else fn(*args)
+            wrapper._foreign = True
+            return wrapper
+        w = make()
+        EXPORTS[i] = (name, w, byref)
+        g[name] = w
+
+
+def _foreign_window(win):
+    """(controls) of another program's window via AT-SPI, or None if it is this script's or AT-SPI is off."""
+    from .guiobj import gui_for_window
+    from . import atspi_
+    if not win or gui_for_window(win) is not None or not atspi_.available():
+        return None
+    return atspi_.controls(*_win_info(win))
+
+
+def _foreign_menu_select(win, path):
+    """MenuSelect on another program's menu bar through AT-SPI (names match without "&", case-insensitively;
+    "N&" picks the Nth item)."""
+    from . import atspi_
+    if not atspi_.available():
+        throw("TargetError", "Target menu not found.")
+    root = atspi_.window_accessible(*_win_info(win))
+    bar = next((a for a in atspi_._descendants(root, 4) if a.get_role_name() == "menu bar"), None) if root else None
+    if bar is None:
+        throw("TargetError", "Target menu not found.")
+    node = bar
+    for depth, name in enumerate(path):
+        items = [a for a in atspi_._descendants(node, 2)
+                 if a.get_role_name() in ("menu", "menu item", "check menu item", "radio menu item")
+                 and a.get_parent() in (node,) + tuple(c for c in atspi_._children(node) if c.get_role_name() == "menu")]
+        want = name.replace("&", "").lower()
+        hit = None
+        if name.endswith("&") and name[:-1].isdigit():
+            i = int(name[:-1]) - 1
+            hit = items[i] if 0 <= i < len(items) else None
+        else:
+            hit = next((a for a in items if (a.get_name() or "").replace("_", "").lower() == want), None)
+        if hit is None:
+            throw("TargetError", "Target menu item not found.", name)
+        f = atspi_.Foreign(hit, hit.get_role_name(), "", 0, win)
+        if depth == len(path) - 1:
+            f.do_action("click", "activate")
+            return ""
+        node = hit
+    return ""
+
+
+_install_foreign()
