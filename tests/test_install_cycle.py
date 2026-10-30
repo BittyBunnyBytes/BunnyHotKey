@@ -165,6 +165,9 @@ def _urlopen(url, *a, **kw):
     u = url if isinstance(url, str) else url.full_url
     if u.startswith("https://codeload.github.com/") and os.environ.get("BHK_TEST_TARBALL"):
         return _Tarball(os.environ["BHK_TEST_TARBALL"])
+    if u.startswith("https://api.github.com/repos/") and "/commits/" in u and os.environ.get("BHK_TEST_TARBALL"):
+        import io                      # "latest commit" lookup: a commit no install has, so update downloads
+        return io.BytesIO(b'{"sha": "' + b"f" * 40 + b'"}')
     _block("network", u)
 
 

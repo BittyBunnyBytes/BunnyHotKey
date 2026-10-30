@@ -215,9 +215,32 @@ def _unsaved_work(root):
     return ""
 
 
+BUILD_FILE = ".bhk-build"            # in the installed app: which commit it is and when that was made
+
+
+def _build_stamp(root):
+    """{"commit", "time"} of a Bunny Hot Key folder: from git for a checkout, else from the installed app's stamp."""
+    if os.path.isdir(os.path.join(root, ".git")) and shutil.which("git"):
+        r = _git("log", "-1", "--format=%H %ct", root=root, check=False).stdout.split()
+        if len(r) == 2:
+            return {"commit": r[0], "time": int(r[1])}
+    try:
+        with open(os.path.join(root, BUILD_FILE)) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_stamp(root, stamp):
+    if stamp:
+        with open(os.path.join(root, BUILD_FILE), "w") as fh:
+            json.dump(stamp, fh)
+
+
 def _install_app(root):
     """Put the app files of the Bunny Hot Key folder `root` into ~/.local/share/BunnyHotKey/app and return that path.
-    Never falls back to running from `root`: if the install can't be put in place, nothing changes and bhk stops."""
+    An existing install is updated (never downgraded to an older commit).  Never falls back to running from `root`:
+    if the install can't be put in place, nothing changes and bhk stops."""
     dest = app_dir()
     if _same(root, dest):
         return dest
@@ -230,6 +253,16 @@ def _install_app(root):
     why = _unsaved_work(dest) if os.path.lexists(dest) else ""
     if why:
         raise SystemExit(f"bhk: {dest} is a git checkout and {why}; move it away first")
+    stamp = _build_stamp(root)
+    if os.path.lexists(dest):
+        have = _build_stamp(dest)
+        name = lambda st: st.get("commit", "")[:7] or "unknown version"
+        if have.get("time") and stamp.get("time") and stamp["time"] < have["time"] and \
+                stamp.get("commit") != have.get("commit"):
+            print(f"Bunny Hot Key is already installed in {dest} with a newer version ({name(have)}); keeping it.")
+            _remove_source(root)
+            return dest
+        print(f"Bunny Hot Key is already installed in {dest}; updating it ({name(have)} -> {name(stamp)}).")
     new, old = dest + ".new", dest + ".old"
     for d in (new, old):
         if os.path.lexists(d):
@@ -237,6 +270,7 @@ def _install_app(root):
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     try:
         shutil.copytree(root, new, symlinks=True, ignore=shutil.ignore_patterns(*APP_SKIP))
+        _write_stamp(new, stamp)
     except OSError as e:
         shutil.rmtree(new, ignore_errors=True)
         raise SystemExit(f"bhk: couldn't copy Bunny Hot Key into {dest} ({e}); nothing was changed")
@@ -246,12 +280,59 @@ def _install_app(root):
     if os.path.lexists(old):
         shutil.rmtree(old, ignore_errors=True)
     print(f"Installed Bunny Hot Key into {dest}.")
+    _remove_source(root)
+    return dest
+
+
+def _parent_running_from(root):
+    """PID of the bhk process that started this one when it runs from `root` (an older `bhk update` calls the new
+    setup-desktop and still needs its folder afterwards), else 0."""
+    pid = os.getppid()
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            argv = fh.read().split(b"\0")
+        with open(f"/proc/{pid}/environ", "rb") as fh:
+            env = dict(e.split(b"=", 1) for e in fh.read().split(b"\0") if b"=" in e)
+    except OSError:
+        return 0
+    if b"bunnyhotkey" not in argv:
+        return 0
+    paths = env.get(b"PYTHONPATH", b"").decode(errors="replace").split(":")
+    return pid if any(p and _same(p, root) for p in paths) else 0
+
+
+def _remove_source(root):
+    """Delete the folder Bunny Hot Key was installed from, unless it holds work that isn't on GitHub."""
     why = _unsaved_work(root)
     if why:
         print(f"Left {root} untouched because {why}; bhk doesn't use it.")
-    elif not _protected(root) and _rmtree(root, _is_bhk_tree, "a Bunny Hot Key clone"):
+        return
+    if _protected(root) or not _is_bhk_tree(root):
+        return
+    parent = _parent_running_from(root)
+    if parent:
+        code = ("import os, shutil, sys, time\npid, root = int(sys.argv[1]), sys.argv[2]\n"
+                "for _ in range(3000):\n"
+                "    try:\n        st = open(f'/proc/{pid}/stat').read().rpartition(')')[2].split()[0]\n"
+                "    except OSError:\n        break\n"
+                "    if st == 'Z':\n        break\n    time.sleep(0.2)\n"
+                "if os.path.isfile(os.path.join(root, 'bunnyhotkey', '__main__.py')):\n"
+                "    shutil.rmtree(root, ignore_errors=True)\n")
+        subprocess.Popen([sys.executable, "-I", "-c", code, str(parent), root], cwd="/", start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"Removing {root} (the old install) as soon as the running bhk update finishes.")
+    elif _rmtree(root, _is_bhk_tree, "a Bunny Hot Key clone"):
         print(f"Removed {root} (the copy you cloned or unpacked); it is no longer needed.")
-    return dest
+
+
+def _launcher_root():
+    """The folder the current ~/.local/bin/bhk runs Bunny Hot Key from (an older install may be anywhere)."""
+    try:
+        with open(_launcher_path(), errors="replace") as fh:
+            m = re.search(r'PYTHONPATH="([^"$]+)', fh.read(4096))
+    except OSError:
+        return ""
+    return m.group(1) if m else ""
 
 
 def _launcher_path():
@@ -560,6 +641,7 @@ def update(args):
     GitHub (git checkouts) or download and unpack it (ZIP installs), and refresh the desktop integration."""
     from . import __version__ as old
     integrated = _is_our_launcher(_launcher_path())
+    before_commit = _build_stamp(ROOT).get("commit", "")[:7]
     root = _install_app(ROOT)          # an older install outside ~/.local moves into BHK's own folder first
     if integrated:
         _write_launcher(root)
@@ -580,14 +662,21 @@ def update(args):
         branch = next((a for a in args if not a.startswith("-")), "main")
         if not re.fullmatch(r"[\w.-]+(/[\w.-]+)*", branch) or ".." in branch:
             raise SystemExit(f"bhk: not a branch name: {branch}")
-        _update_from_tarball(root, branch)
+        try:
+            latest = _get_json(f"https://api.github.com/repos/{REPO}/commits/{branch}")["sha"]
+        except Exception:
+            latest = ""
+        if latest and latest == _build_stamp(root).get("commit") and "--force" not in args:
+            print(f"Bunny Hot Key is up to date ({old}, {latest[:7]}).")
+        else:
+            _update_from_tarball(root, branch)
     sys.stdout.flush()
     if integrated:
         subprocess.run([sys.executable, "-m", "bunnyhotkey", "setup-desktop"], cwd=root,
                        env={**os.environ, "PYTHONPATH": root})
-    new = subprocess.run([sys.executable, "-c", "import bunnyhotkey; print(bunnyhotkey.__version__)"], cwd=root,
-                         capture_output=True, text=True).stdout.strip()
-    print(f"Bunny Hot Key {old} -> {new or '?'}")
+    after = _build_stamp(root).get("commit", "")[:7]
+    if after and after != before_commit:
+        print(f"Bunny Hot Key is now at {after}" + (f" (was {before_commit})." if before_commit else "."))
     return 0
 
 
@@ -608,6 +697,7 @@ def _update_from_tarball(root, branch):
             shutil.copyfileobj(resp, fh)
         with tarfile.open(arc) as tf:
             tf.extractall(tmp, filter="data")
+            commit = tf.pax_headers.get("comment", "")        # GitHub names the commit in the archive header
         src = next((os.path.join(tmp, d) for d in os.listdir(tmp) if os.path.isdir(os.path.join(tmp, d))), "")
         if not _is_bhk_tree(src):
             raise SystemExit("bhk: the download doesn't look like Bunny Hot Key; nothing was changed")
@@ -621,6 +711,7 @@ def _update_from_tarball(root, branch):
             elif os.path.lexists(dst):
                 os.remove(dst)
             shutil.move(os.path.join(src, name), dst)
+        _write_stamp(new, {"commit": commit, "time": int(__import__("time").time())})
     if not _is_bhk_tree(new):
         _rmtree(new, lambda p: True, "a Bunny Hot Key update folder")
         raise SystemExit("bhk: the update didn't unpack completely; nothing was changed")
@@ -707,7 +798,11 @@ def setup_desktop(args):
     # every refusal comes before anything is copied or deleted
     if os.path.lexists(launcher) and not _is_our_launcher(launcher) and "--force" not in args:
         raise SystemExit(f"bhk: {launcher} already exists and isn't Bunny Hot Key's; move it away or pass --force")
+    previous = _launcher_root() if _is_our_launcher(launcher) else ""
     root = _install_app(ROOT)
+    if previous and not _same(previous, root) and not _same(previous, ROOT) and _is_bhk_tree(previous):
+        print(f"Found an older Bunny Hot Key install in {previous}.")
+        _remove_source(previous)       # an older install elsewhere: replaced by this one
     setup = _load_setup()
     if "previous_default" not in setup and shutil.which("xdg-mime"):
         prev = subprocess.run(["xdg-mime", "query", "default", MIME], capture_output=True, text=True).stdout.strip()

@@ -55,10 +55,13 @@ Bunny Hot Key keeps everything in its own folder, `~/.local/share/BunnyHotKey`:
 (your own `#Include <Lib>` scripts). `setup-desktop` copies the program into `app/` and then deletes the
 folder you cloned or unpacked, unless that folder has uncommitted changes or unpushed commits (it is
 then left untouched, and bhk doesn't use it).
+Running `setup-desktop` again when Bunny Hot Key is already installed updates that install (it never
+replaces a newer version with an older clone), and an older install that ran from another folder is
+replaced and its folder removed.
 
 ### Update
 ```sh
-bhk update        # downloads the latest version from GitHub and swaps it in
+bhk update        # downloads the latest version from GitHub and swaps it in (nothing to do when up to date)
 ```
 The new version is unpacked and checked next to the old one before the swap, so a failed download never
 leaves a half-updated install. An older install that runs from somewhere else (for example the folder it
