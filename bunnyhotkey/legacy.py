@@ -761,6 +761,8 @@ class Translator:
         self.in_class = False
         self.in_method = False
         self.delim = ','
+        self.hoist = None        # (out, stack) saved while a class inside a block is translated
+        self.hoisted = []        # such classes, emitted after everything else
 
     # ------------------------------------------------------------ helpers
     def emit(self, text):
@@ -985,7 +987,7 @@ class Translator:
             self.file, self.line = self.lines[0].file, self.lines[0].line
         for p in self.prologue:
             head.append(LogicalLine(p, self.line, self.file))
-        return head + self.out
+        return head + self.out + self.hoisted
 
     # ------------------------------------------------------------ lines
     @property
@@ -998,10 +1000,34 @@ class Translator:
         self.stack.append(k)
         self._ctx()
 
+    def definable(self):
+        """Whether a function or class can be defined here: v1 allows it anywhere outside a function, even inside
+        a "{ }" block (script.cpp checks only g->CurrentFunc)."""
+        return not self.stack or (self.top and not self.hoist and 'hotblock' not in self.stack)
+
+    def hoist_definition(self):
+        """v2 needs definitions at the top level: one inside a block is translated separately and goes last."""
+        if self.stack:
+            self.hoist = (self.out, self.stack)
+            self.out, self.stack = [], []
+
+    def block_open(self):
+        """'{' for a block; after a translated call such as "f(x)", v2 would read "f(x)" + "{" as a function
+        definition, so a plain block there opens with an always-true if."""
+        prev = self.out[-1].text if self.out else ''
+        if self.pending is None and re.fullmatch(r'[\w.]+\(.*\)', prev, re.S) and \
+                not re.match(r'(if|while|for|loop|switch|catch|else|try|finally)\b', prev, re.I):
+            return 'if true {'
+        return '{'
+
     def close_block(self):
         if self.stack:
             if self.stack.pop() == 'hotblock':
                 self.emit('return')
+        if self.hoist and not self.stack:                   # end of a class that was inside a block
+            self.hoisted += self.out
+            self.out, self.stack = self.hoist
+            self.hoist = None
         self._ctx()
 
     def _ctx(self):
@@ -1017,11 +1043,11 @@ class Translator:
             if not t:
                 return
         if t == '{':
-            self.emit('{')
+            self.emit(self.block_open())
             self.open_block()
             return
         if t.startswith('{') and not t.startswith('{}'):
-            self.emit('{')                              # "{ statement" opens a block and runs the statement
+            self.emit(self.block_open())                # "{ statement" opens a block and runs the statement
             self.open_block()
             return self.do_line(t[1:].strip())
         hot = classify_hot_line(t.replace('`;', ';', 1) if t.startswith('`;') else t)
@@ -1212,17 +1238,20 @@ class Translator:
         # function definitions
         if top and self.top or 'class' in self.stack and not self.in_method:
             m2 = re.match(r'(' + NAME + r'+)\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*\{\s*(\S.*)$', t)
-            if m2 and w not in ('if', 'while', 'for', 'loop', 'switch', 'catch', 'return') and not self.stack \
+            if m2 and w not in ('if', 'while', 'for', 'loop', 'switch', 'catch', 'return') and self.definable() \
                     and m2[3].strip() != '}':
+                self.hoist_definition()
                 self.statement(t[:t.index('{', m2.end(2))].rstrip() + ' {', top)    # Func() { first statement
                 return self.do_line(m2[3].strip())
             m = re.match(r'(' + NAME + r'+)\((.*)\)\s*(\{)?$', t)
             if m and w not in ('if', 'while', 'for', 'loop', 'switch', 'catch', 'return') and \
-                    (m[3] or self.next_text.startswith('{')) and not self.stack:
+                    (m[3] or self.next_text.startswith('{')) and self.definable():
+                self.hoist_definition()
                 return self.func_head(m)
-        if w == 'class' and re.match(r'class\s', t, re.I) and not self.stack:
+        if w == 'class' and re.match(r'class\s', t, re.I) and self.definable():
             m = re.match(r'class\s+(' + NAME + r'+)(?:\s+extends\s+([\w.]+))?\s*(\{)?$', t, re.I)
             if m:
+                self.hoist_definition()
                 return self.class_head(m)
         if self.stack and self.stack[-1] == 'getset' and w in ('get', 'set') and re.fullmatch(r'(get|set)\s*\{?', t, re.I):
             self.emit(w + (' {' if t.endswith('{') else ''))

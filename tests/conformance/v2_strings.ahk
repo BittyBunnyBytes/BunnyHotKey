@@ -79,6 +79,40 @@ RegExMatch("abc", "a(?CCounter)b")
 out(hits)
 ;; expect: 1
 
+;; test: RegEx callouts: numbered, named with a number, pcre_callout, FoundPos and the partial match
+Trace(m, n, pos, hay, needle) {
+    global calls
+    calls .= n ":" pos ":" m[0] " "
+    return 0
+}
+calls := ""
+pcre_callout := Trace
+r1 := RegExMatch("aab", "a(?C7)b")
+r2 := RegExMatch("xabc", "a(?C3:Trace)b(?CTrace)c", &m)
+out(r1 " " r2 " " m[0] " | " Trim(calls))
+;; expect: 2 2 abc | 7:1:a 7:2:a 3:2:a 0:2:ab
+
+;; test: RegEx callouts: a positive return backtracks, a negative one aborts with an error
+Short(m, *) => StrLen(m[0]) > 2
+Abort(m, *) => -5
+p := RegExMatch("abcd", "\w+(?CShort)", &m)
+try
+    RegExMatch("abc", "b(?CAbort)")
+catch Error as e
+    err := e.Message " " e.Extra
+out(p " " m[0] " | " err)
+;; expect: 1 ab | PCRE execution error. -5
+
+;; test: RegEx callouts in RegExReplace and the newline options `n and `a
+Mark(m, n, pos, *) {
+    global seen
+    seen .= pos
+}
+seen := ""
+r := RegExReplace("a1b2", "\d(?CMark)", "#")
+out(r " " seen " " RegExMatch("a`r`nb", "m`n)^b$") " " RegExMatch("xa`nb", "m`a)a$") " " RegExMatch("xa`r`nb", "m)a$"))
+;; expect: a#b# 24 4 2 2
+
 ;; test: Sort options
 out(Sort("c,a,b", "D,") " " Sort("10`n9`n100", "N") " " Sort("b,a,b", "D, U") " " Sort("a,b,c", "D, R"))
 ;; expect: a,b,c 9

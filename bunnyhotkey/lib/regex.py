@@ -1,4 +1,5 @@
-"""RegExMatch / RegExReplace (lib/regex.cpp) on Python's re with a PCRE translation layer."""
+"""RegExMatch / RegExReplace (lib/regex.cpp) on libpcre16 (pcre16.py), or on Python's re with a PCRE
+translation layer when that library isn't installed."""
 from __future__ import annotations
 
 import re
@@ -9,7 +10,9 @@ from ..values import UNSET
 from . import export, setref
 
 _cache: dict[str, tuple] = {}
-_OPT_RE = re.compile(r"^([imsxADJUXPSC`nra]*)\)")
+# options before ")": letters, and the newline options `n, `r, `r`n and `a (real control characters in the needle,
+# or a literal backtick and letter)
+_OPT_RE = re.compile("^([imsxADJUXPSC\n\r\x07]*(?:`[nra][imsxADJUXPSC\n\r\x07]*)*)\\)")
 POSIX = {"alpha": "a-zA-Z", "digit": "0-9", "alnum": "a-zA-Z0-9", "upper": "A-Z", "lower": "a-z",
          "space": r"\s", "blank": r" \t", "punct": r"!-/:-@\[-`{-~", "xdigit": "0-9A-Fa-f",
          "word": r"\w", "cntrl": r"\x00-\x1f\x7f", "print": r"\x20-\x7e", "graph": r"\x21-\x7e"}
@@ -172,7 +175,17 @@ def compile_pattern(needle: str):
             elif o == "`" and k + 1 < len(opts):
                 k += 1
                 newline = opts[k]
+            elif o in "\n\x07":
+                newline = "n" if o == "\n" else "a"
+            elif o == "\r":
+                newline = "rn" if opts[k + 1:k + 2] == "\n" else "r"
+                k += newline == "rn"
             k += 1
+    from . import pcre16                                    # AutoHotkey's own engine when it's installed
+    if pcre16.available():
+        res = (pcre16.Pattern(needle, pat, m.group(1) if m else "", newline), False)
+        _cache[needle] = res
+        return res
     try:
         tr = _translate(pat, ungreedy)
         if anchored:

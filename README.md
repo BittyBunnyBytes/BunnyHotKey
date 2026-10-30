@@ -15,7 +15,7 @@
 
 <!-- parity:summary:start -->
 **In short:** every percentage is a pass rate of run tests (`tests/conformance`, real scripts compared with AutoHotkey's documented results). The v2 *language* suite passes 100%, and **332 of 344 built-in functions (97%)** are called by a passing run test.
-**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - Public scripts that load 97%, hotkey syntax & #If directives 100%, commands 100%, language 100%, Gui 100%; see [docs/V1.md](docs/V1.md).
+**AutoHotkey v1:** v1.1 scripts run through a compatibility frontend - Public scripts that load 98%, hotkey syntax & #If directives 100%, commands 100%, language 100%, Gui 100%; see [docs/V1.md](docs/V1.md).
 
 **Missing or left to do:**
 - **Windows COM servers:** objects are real native COM (ComCall, ComObjQuery, ComObjFromPtr, IDispatch both ways, a running-object table shared by BHK scripts), and WinHttp, XMLHTTP, Dictionary, WScript.Shell, FileSystemObject, ADODB.Stream, SAPI, Shell.Application, WMI and the web browser are emulated; servers that only exist as Windows binaries (Office, UIAutomation, WebView2) aren't available.
@@ -67,7 +67,8 @@ bhk uninstall --yes     # yes to everything, including deleting the Bunny Hot Ke
 
 Requirements: Python 3.11+, an X11 session (libX11/libXtst/libXi, standard on
 every desktop) and PyGObject with GTK 3 for MsgBox/InputBox/Gui (preinstalled
-on most desktops). No pip packages are needed.
+on most desktops). libpcre16 (PCRE 8, package `pcre`/`libpcre3`) is used for RegEx when present.
+No pip packages are needed.
 
 ## Use
 ```sh
@@ -88,6 +89,7 @@ bhk doctor                 # what BHK can use on this machine
   every loop type including `Loop … else`, `switch`, `goto`, continuation
   sections, `#Include <Lib>`, `#HotIf` and the other directives.
 - **Library:** all 362 entries in AutoHotkey's built-in function table exist.
+  RegEx runs on libpcre16, the same PCRE engine AutoHotkey uses (callouts included).
   COM works for the common automation objects (emulated, see below); raw COM calls raise a clear error.
   - `CallbackCreate` gives real native function pointers, so Linux libraries (e.g. libc's `qsort`) can call
     back into the script; `DllCall` also calls by address and `NumGet`/`StrGet` read native pointers.
