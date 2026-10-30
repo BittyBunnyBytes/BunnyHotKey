@@ -72,29 +72,94 @@ def class_of(d, w):
     return inst, cls
 
 
+def _xres_pid(d, w):
+    """The window owner's PID as the X server sees it (X-Resource ClientIds).  _NET_WM_PID is whatever the client
+    wrote, which is a PID in its own namespace for Steam, Flatpak and Proton/pressure-vessel apps."""
+    import ctypes
+    from .. import xlib
+    lib = xlib._lib("XRes")
+    if lib is None:
+        return 0
+
+    class Spec(ctypes.Structure):
+        _fields_ = [("client", ctypes.c_ulong), ("mask", ctypes.c_uint)]
+
+    class ClientId(ctypes.Structure):
+        _fields_ = [("spec", Spec), ("length", ctypes.c_long), ("value", ctypes.c_void_p)]
+
+    spec, n, ids = Spec(w, 2), ctypes.c_long(), ctypes.POINTER(ClientId)()      # 2 = XRES_CLIENT_ID_PID_MASK
+    with d.lock:
+        try:
+            if lib.XResQueryClientIds(ctypes.c_void_p(d.dpy), ctypes.c_long(1), ctypes.byref(spec), ctypes.byref(n),
+                                      ctypes.byref(ids)):
+                return 0
+        except AttributeError:
+            return 0
+        try:
+            for i in range(n.value):
+                if ids[i].spec.mask & 2 and ids[i].length == 4 and ids[i].value:
+                    return int(ctypes.cast(ids[i].value, ctypes.POINTER(ctypes.c_uint32))[0])
+        finally:
+            if ids:
+                lib.XResClientIdsDestroy(n, ids)
+    return 0
+
+
+def _ns_pids(pid):
+    try:
+        with open(f"/proc/{pid}/status") as fh:
+            return next((ln.split()[1:] for ln in fh if ln.startswith("NSpid:")), [])
+    except OSError:
+        return []
+
+
 def pid_of(d, w):
     v = d.get_longs(w, "_NET_WM_PID")
-    return int(v[0]) if v else 0
+    net = int(v[0]) if v else 0
+    host = _xres_pid(d, w)
+    # _NET_WM_PID wins unless it's the X client's PID inside its own namespace (Flatpak/Steam/Proton): a BHK Gui is
+    # drawn by the GTK helper process but carries the script's PID, as AutoHotkey's windows do.
+    if host and host != net and (not net or str(net) in _ns_pids(host)[1:]):
+        return host
+    return net
+
+
+def _wine_exe(pid):
+    """A Wine/Proton process runs as wine(64)-preloader; its Windows path ("C:\\Games\\game.exe") is argv[0]."""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            argv0 = fh.read().split(b"\0", 1)[0].decode("utf-8", "replace")
+    except OSError:
+        return ""
+    return argv0 if argv0.lower().endswith(".exe") else ""
+
+
+def _is_wine(exe):
+    base = os.path.basename(exe)
+    return base.startswith("wine") and (base.endswith("preloader") or base in ("wine", "wine64"))
 
 
 def proc_name(pid):
     if not pid:
         return ""
     try:
-        return os.path.basename(os.readlink(f"/proc/{pid}/exe"))
+        exe = os.readlink(f"/proc/{pid}/exe")
     except OSError:
         try:
             with open(f"/proc/{pid}/comm") as fh:
                 return fh.read().strip()
         except OSError:
             return ""
+    win = _wine_exe(pid) if _is_wine(exe) else ""
+    return win.replace("\\", "/").rsplit("/", 1)[-1] if win else os.path.basename(exe)
 
 
 def proc_path(pid):
     try:
-        return os.readlink(f"/proc/{pid}/exe")
+        exe = os.readlink(f"/proc/{pid}/exe")
     except OSError:
         return ""
+    return (_wine_exe(pid) or exe) if _is_wine(exe) else exe
 
 
 def active_window(d):

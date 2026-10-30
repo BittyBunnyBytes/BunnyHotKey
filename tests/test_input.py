@@ -66,6 +66,24 @@ eng.on_event(63, False)
 rt.check_interrupts()
 check("hotkeys fired", fired, ["^j", "~F5"])
 
+# a #HotIf remap's key-up half fires even when the window changed while the key was down (else the target sticks)
+from bunnyhotkey.hotmgr import Criterion  # noqa: E402
+game = {"active": True}
+crit = Criterion(None, "WinActive Rain World", kind="active", wintitle="Rain World")
+real_eval = mgr.eval_criterion
+mgr.eval_criterion = lambda c: game["active"] if c is crit else real_eval(c)
+fired.clear()
+mgr.add_hotkey("*~F6", BuiltinFunc("down", lambda name: fired.append("z down"), 1, 1), crit)
+mgr.add_hotkey("*~F6 up", BuiltinFunc("up", lambda name: fired.append("z up"), 1, 1), crit)
+eng.on_event(64, True)
+game["active"] = False                    # alt-tab / click into another window with the button still held
+eng.on_event(64, False)
+eng.on_event(64, True)                    # pressed again outside the game: neither half fires
+eng.on_event(64, False)
+rt.check_interrupts()
+check("#HotIf remap releases after the window changes", fired, ["z down", "z up"])
+mgr.eval_criterion = real_eval
+
 # --- hotstrings ---
 sent = []
 import bunnyhotkey.lib.input_ as inp  # noqa: E402

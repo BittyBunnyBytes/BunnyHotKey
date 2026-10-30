@@ -160,6 +160,9 @@ class HookEngine:
         self.suppressed_down: set[int] = set()   # codes whose down was suppressed -> suppress their up
         self.prefix_used: set[int] = set()       # prefix keys that were used in a combination
         self.prefix_down_fired: dict[int, Hotkey] = {}
+        # key-up hotkey chosen when its down hotkey fired (AHK's hotkey_to_fire_upon_release): the release of a
+        # remap like `#HotIf WinActive(...)` + `a::b` still fires after the window changed, or b would stay down
+        self.fire_upon_release: dict[int, tuple] = {}
         self.suspended = False
 
     # --- registry ---
@@ -274,8 +277,23 @@ class HookEngine:
         _, hk, v = best
         if hk.spec.prefix is not None:
             self.prefix_used.add(hk.spec.prefix.code)
+        if is_down and not up and kind != "wheel":
+            pair = self._up_partner(hk, code, kind)
+            if pair:
+                self.fire_upon_release[code] = pair
         self.rt.fire_hotkey(hk, v)
         return not hk.spec.passthrough
+
+    def _up_partner(self, hk, code, kind):
+        """The key-up hotkey paired with down hotkey `hk` and its variant as of now, or None."""
+        sp = hk.spec
+        for uh in self._candidates(code, kind, True):
+            u = uh.spec
+            if (u.mods == sp.mods and u.wildcard == sp.wildcard and u.key.neutral == sp.key.neutral
+                    and (u.prefix.code if u.prefix else None) == (sp.prefix.code if sp.prefix else None)):
+                v = self._active_variant(uh)
+                return (uh, v) if v is not None else None
+        return None
 
     def uses_hook(self, hk: Hotkey, v: Variant) -> bool:
         """Whether AutoHotkey would implement this hotkey with the keyboard hook rather than RegisterHotkey
@@ -317,7 +335,12 @@ class HookEngine:
     def _on_up(self, code, kind) -> bool:
         suppress = code in self.suppressed_down
         self.suppressed_down.discard(code)
-        fired_up = self._match_and_fire(code, False, kind, up=True)
+        pending = self.fire_upon_release.pop(code, None)
+        if pending and pending[1].enabled and pending[0] in self.hotkeys:
+            self.rt.fire_hotkey(*pending)
+            fired_up = not pending[0].spec.passthrough
+        else:
+            fired_up = self._match_and_fire(code, False, kind, up=True)
         if code in self.prefixes():
             if code not in self.prefix_used:
                 # prefix used alone: fire its own non-combination hotkey on release, or replay it
