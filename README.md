@@ -43,27 +43,40 @@ works internally and which BHK module mirrors each part.
 ```sh
 git clone https://github.com/BittyBunnyBytes/BunnyHotKey.git
 cd BunnyHotKey
-python3 -m bunnyhotkey setup-desktop   # puts `bhk` in ~/.local/bin, icon, .ahk file association
+python3 -m bunnyhotkey setup-desktop   # installs into ~/.local/share/BunnyHotKey/app, puts `bhk` in ~/.local/bin,
+                                       # adds the icon and the .ahk file association
 bhk install                            # optional: official AutoHotkey v2 files (Window Spy, Dash, templates)
 ```
 No git? Download the ZIP from GitHub (Code → Download ZIP), unpack it anywhere and run the same
 `setup-desktop` command from inside the folder.
 
+Bunny Hot Key keeps everything in its own folder, `~/.local/share/BunnyHotKey`:
+`app/` (the program), `prefix/` (installed AutoHotkey versions, emulated registry, C: drive) and `Lib/`
+(your own `#Include <Lib>` scripts). `setup-desktop` copies the program into `app/` and then deletes the
+folder you cloned or unpacked, unless that folder has uncommitted changes or unpushed commits (it is
+then left untouched, and bhk doesn't use it).
+
 ### Update
 ```sh
-bhk update        # pulls the latest version from GitHub (git clone) or re-downloads it (ZIP install)
+bhk update        # downloads the latest version from GitHub and swaps it in
 ```
-A git checkout with local changes is left alone unless you pass `--force`. The launcher, icon and
-file association are refreshed automatically.
+The new version is unpacked and checked next to the old one before the swap, so a failed download never
+leaves a half-updated install. An older install that runs from somewhere else (for example the folder it
+was cloned into) is moved into `~/.local/share/BunnyHotKey/app` first. The launcher, icon and file
+association are refreshed automatically.
 
 ### Uninstall
 ```sh
-bhk uninstall           # removes the bhk launcher, menu entry, icon and .ahk file type, then asks
-                        # whether to delete the prefix and the Bunny Hot Key folder too
+bhk uninstall           # stops running scripts, removes the program, launcher, menu entry, icons, .ahk file type
+                        # and its association, BHK's runtime/temp files; asks about the prefix and login items
 bhk uninstall --purge   # also deletes the prefix (installed AutoHotkey versions, registry, C: drive)
-bhk uninstall --yes     # yes to everything, including deleting the Bunny Hot Key folder
+bhk uninstall --yes     # yes to every question
 ```
-`bhk uninstall VERSION` still removes just one installed AutoHotkey version.
+Uninstall only deletes folders it can recognise as BHK's (it refuses `$HOME`, `/` and similar even if
+`BHK_PREFIX` points there), restores the `.ahk` default app you had before, and never deletes your
+`Lib/` scripts or a git checkout with unpushed work unless you confirm it yourself (`--force` for a
+checkout). Scripts are asked to exit first, so held keys, mouse buttons and remapped modifiers are
+released. `bhk uninstall VERSION` removes just one installed AutoHotkey version.
 
 Requirements: Python 3.11+, an X11 session (libX11/libXtst/libXi, standard on
 every desktop) and PyGObject with GTK 3 for MsgBox/InputBox/Gui (preinstalled
@@ -145,7 +158,7 @@ bhk doctor                 # what BHK can use on this machine
 
 ## Note for agents
 If you are an AI agent trying to use this project, these are the facts you need:
-- **Update / uninstall:** `bhk update` (git pull or ZIP re-download), `bhk uninstall [--purge] [--yes]`.
+- **Update / uninstall:** `bhk update` (atomic download from GitHub), `bhk uninstall [--purge] [--yes]`.
 - **Command:** `bhk <script.ahk> [args]`, or `python3 -m bunnyhotkey <script.ahk>` from the repo root with no install. Exit code = the script's `ExitApp` code; 2 = load error.
 - **Script syntax:** v2 remains the default for ambiguous files. v1 syntax is detected automatically, and if the guessed version doesn't load BHK tries the other; use `--ahk-version=1` to force v1. See [supported v1 syntax and limits](docs/V1.md).
 - **Headless / CI use:** pass `--console --backend=null`.

@@ -6,10 +6,10 @@
   bhk versions                   list installed AutoHotkey versions
   bhk uninstall VERSION          remove an installed AutoHotkey version
   bhk update                     update Bunny Hot Key itself from GitHub
-  bhk uninstall [--purge]        uninstall Bunny Hot Key (launcher, menu entry, file type; asks about prefix/folder)
+  bhk uninstall [--purge] [--yes]  uninstall Bunny Hot Key (stops running scripts, removes everything it set up)
   bhk dash | windowspy | launcher  run AutoHotkey's own UX scripts from the newest install
   bhk new NAME                   create a new script from AutoHotkey's template
-  bhk setup-desktop              register .ahk files, the icon and menu entries with your desktop
+  bhk setup-desktop              install into ~/.local/share/BunnyHotKey/app, register .ahk files, icon, menu entry
   bhk doctor                     check X11/Wayland input permissions and optional tools
 """
 from __future__ import annotations
@@ -93,7 +93,18 @@ def main(argv=None) -> int:
     try:
         return prog.run()
     except SystemExit as e:
+        _cleanup(prog)
         return int(e.code or 0)
+    except BaseException:
+        _cleanup(prog)       # a crash still lets go of held keys/buttons and restores the modifier map
+        raise
+
+
+def _cleanup(prog):
+    try:
+        prog.shutdown()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

@@ -112,9 +112,12 @@ class ModifierBlock:
         if not self.removed:
             return
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        code = ("import sys, json; sys.path.insert(0, sys.argv[1]); line = sys.stdin.readline()\n"
+        # the restore code is imported before waiting, so it still works if BHK's folder is moved or deleted
+        # (bhk update / uninstall) while the script runs
+        code = ("import sys, json; sys.path.insert(0, sys.argv[1])\n"
+                "from bunnyhotkey.backends.modmap import restore_standalone\n"
+                "line = sys.stdin.readline()\n"
                 "if line.strip() != 'done':\n"
-                "    from bunnyhotkey.backends.modmap import restore_standalone\n"
                 "    restore_standalone(json.loads(sys.argv[2]))\n")
         try:
             self.watchdog = subprocess.Popen([sys.executable, "-I", "-c", code, root, json.dumps(self.removed)],

@@ -59,6 +59,8 @@ class X11Backend:
         import collections
         self.sent = collections.deque()          # injected key events awaiting their raw/grabbed echo
         self.sent_down: set[int] = set()         # keys the script is holding down via XTest
+        self.inj_keys: set[int] = set()          # keycodes / buttons this process pressed and hasn't released yet:
+        self.inj_buttons: set[int] = set()       # the X server keeps fake presses down after the client is gone
         from .modmap import ModifierBlock
         self.modblock = ModifierBlock()
         self.mod_released: set[int] = set()      # suppressed modifiers whose keyboard grab was let go
@@ -94,11 +96,30 @@ class X11Backend:
         os.write(self.wake_w, b"q")
         if self.thread:
             self.thread.join(1.0)
+        self.release_injected()
         if self.modblock.removed:
             try:
                 self.modblock.restore(xlib.Display())
             except OSError:
                 pass
+
+    def release_injected(self):
+        """Let go of every key and mouse button the script left down ({Ctrl down}, Click "D"), so an exit or a
+        crash never leaves the session with a stuck modifier or a held mouse button."""
+        if not (self.inj_keys or self.inj_buttons):
+            return
+        try:
+            t = xlib.Xtst()
+            with self.inj_lock:
+                for kc in sorted(self.inj_keys):
+                    t.XTestFakeKeyEvent(self.inj.dpy, kc, 0, 0)
+                for btn in sorted(self.inj_buttons):
+                    t.XTestFakeButtonEvent(self.inj.dpy, btn, 0, 0)
+                self.inj_keys.clear()
+                self.inj_buttons.clear()
+                self.inj.x.XSync(self.inj.dpy, 0)
+        except Exception:
+            pass
 
     def refresh(self):
         """Re-apply grabs; waits until the X server has them (the Windows hook takes effect at once, so a
@@ -485,6 +506,7 @@ class X11Backend:
         with self.inj_lock:
             self.sent.append([code, bool(down), level, time.monotonic(), False, False])
             t.XTestFakeKeyEvent(self.inj.dpy, code + 8, 1 if down else 0, 0)
+            (self.inj_keys.add if down else self.inj_keys.discard)(code + 8)
 
     def sent_level(self, code, down, path):
         """SendLevel of a key event this process injected (None if it is physical input).  path is 4 for the
@@ -554,6 +576,7 @@ class X11Backend:
         t = xlib.Xtst()
         with self.inj_lock:
             t.XTestFakeButtonEvent(self.inj.dpy, btn, 1 if down else 0, 0)
+            (self.inj_buttons.add if down else self.inj_buttons.discard)(btn)
 
     def wheel(self, name, n):
         btn = WHEEL_OF.get(name)
