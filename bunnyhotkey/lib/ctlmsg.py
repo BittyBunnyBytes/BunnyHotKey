@@ -261,6 +261,7 @@ def _edit_gui(c, msg, wp, lp):
         return 1
     if msg == 0x1501:                                                   # EM_SETCUEBANNER
         _st(c)["cue"] = _str_arg(lp)
+        _srv().call("cue", ctrl=c.cid, text=_st(c)["cue"])
         return 1
     if msg == 0x1502:                                                   # EM_GETCUEBANNER
         cue = _st(c).get("cue")
@@ -859,7 +860,21 @@ def _scintilla(c, msg, wp, lp):
     return None
 
 
-_BY_TYPE = {"IPAddress": _ipaddress, "Edit": _edit, "ListBox": _listbox, "DDL": _combo, "ComboBox": _combo, "Progress": _progress,
+def _button(c, msg, wp, lp):
+    if msg == 0xF7:                                                     # BM_SETIMAGE (IMAGE_BITMAP/IMAGE_ICON)
+        from .gui import PICTURES
+        st = _st(c)
+        prev = st.get("image", 0)
+        st["image"] = lp
+        path = PICTURES.get(lp, "")
+        _srv().call("btnimage", ctrl=c.cid, path=path, icon_only=st.get("icon_only", False))
+        return prev
+    if msg == 0xF6:                                                     # BM_GETIMAGE
+        return _st(c).get("image", 0)
+    return None
+
+
+_BY_TYPE = {"Button": _button, "IPAddress": _ipaddress, "Edit": _edit, "ListBox": _listbox, "DDL": _combo, "ComboBox": _combo, "Progress": _progress,
             "Slider": _slider, "UpDown": _updown, "Hotkey": _hotkey, "StatusBar": _statusbar,
             "ListView": _listview, "TreeView": _treeview}
 

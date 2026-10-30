@@ -543,6 +543,13 @@ def gui_add(this, ctype, options="", text=UNSET):
     if (t != "UpDown" or ctrl.buddy is None) and t != "StatusBar":
         this.prev = ctrl
     CTRLS[ctrl.cid] = ctrl
+    if t == "Button":
+        bs = 0
+        for tok in re.findall(r"(?:^|\s)\+?(0x[0-9a-f]+|\d+)(?=\s|$)", opts, re.I):
+            bs |= int(tok, 0)
+        if bs & 0xC0:                               # BS_ICON/BS_BITMAP: BM_SETIMAGE shows the image without text
+            from .ctlmsg import _st
+            _st(ctrl)["icon_only"] = True
     if t == "Tab":
         this.tab = (ctrl, 1)      # later controls go on the first page until UseTab()
     return ctrl
@@ -853,7 +860,11 @@ def ctrl_setfont(c, opts="", name=UNSET):
 
 def _resolve_cb(owner_gui, cb):
     if isinstance(cb, str) and owner_gui is not None and owner_gui.event_obj is not None:
-        return lambda args: rt().call_method(owner_gui.event_obj, cb, args)
+        sink = owner_gui.event_obj
+        if sink is owner_gui:
+            # A method of the Gui itself doesn't get the Gui as its first arg; it's `this` (script_object.cpp skip_arg).
+            return lambda args: rt().call_method(sink, cb, args[1:] if args and args[0] is sink else args)
+        return lambda args: rt().call_method(sink, cb, args)
     return lambda args: rt().call(cb, args)
 
 

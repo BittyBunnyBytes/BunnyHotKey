@@ -415,7 +415,8 @@ def IL_Add(il, filename, icon_number=1, resize=0):
 
 
 # Icons of Windows system files -> the desktop's icon theme (freedesktop names); BHK's own icon for A_AhkPath
-_WIN_ICONS = {("imageres.dll", -111): "document-new", ("imageres.dll", -99): "help-browser",
+_WIN_ICONS = {("imageres.dll", -111): "document-new", ("imageres.dll", -1025): "folder-open",
+              ("imageres.dll", -114): "preferences-system", ("imageres.dll", -99): "help-browser",
               ("imageres.dll", -116): "preferences-system", ("imageres.dll", -3): "folder",
               ("imageres.dll", -2): "text-x-generic", ("imageres.dll", -5): "drive-harddisk",
               ("shell32.dll", 4): "folder", ("shell32.dll", 1): "text-x-generic", ("shell32.dll", 3): "folder",
@@ -443,9 +444,18 @@ def IL_Destroy(il):
 
 @export(byref=(2,))
 def LoadPicture(filename, options="", imagetype=UNSET):
-    path = picture_path(S(filename))
+    src = S(filename)
+    path = picture_path(src)
     if not path or not os.path.exists(path):
-        return 0
+        # An icon resource of a Windows system file -> a themed icon name the GTK helper loads
+        m = re.search(r"(?:^|\s)icon(-?\d+)", S(options), re.I)
+        path = _themed_icon(src, int(m.group(1)) if m else 1) if re.search(r"\.(dll|exe)$", src, re.I) else None
+        if not path:
+            return 0
+        setref(imagetype, 1)
+        h = next(_handles)
+        PICTURES[h] = path
+        return h
     h = next(_handles)
     PICTURES[h] = path
     setref(imagetype, 1 if path.lower().endswith((".ico", ".cur", ".ani")) else 0)

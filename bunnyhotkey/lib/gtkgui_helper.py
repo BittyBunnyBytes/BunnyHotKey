@@ -1236,6 +1236,9 @@ def load_picture(c, path):
     c["file"] = path
     w = c.get("img") or c["w"]
     want_w, want_h = c.get("pw") or -1, c.get("ph") or -1
+    if path and "/" not in path and Gtk.IconTheme.get_default().has_icon(path):
+        w.set_from_pixbuf(load_icon(path, max(want_w, want_h, 16)))
+        return
     if not os.path.exists(path):
         w.clear()
         return
@@ -2090,6 +2093,21 @@ def handle(req):
             if k in req:
                 c[k] = req[k]
         apply_style(c)
+        return True
+    if op == "btnimage":
+        # BM_SETIMAGE on a BS_ICON button: the image replaces the text
+        c = ctrls[req["ctrl"]]
+        pix = load_icon(req["path"], 16) if req.get("path") else None
+        c["w"].set_image(Gtk.Image.new_from_pixbuf(pix) if pix else None)
+        c["w"].set_always_show_image(bool(pix))
+        if pix and req.get("icon_only"):
+            c["w"].set_tooltip_text(c["w"].get_label().replace("_", ""))
+            c["w"].set_label("")
+        return True
+    if op == "cue":
+        c = ctrls[req["ctrl"]]
+        if "tv" not in c:
+            c["w"].set_placeholder_text(req["text"])
         return True
     if op == "query":
         return query(ctrls[req["ctrl"]], req["what"])
