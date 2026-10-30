@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -361,7 +362,8 @@ def _write_launcher(root):
     tmp = launcher + ".bhk-new"
     with open(tmp, "w") as fh:
         fh.write(f'#!/bin/sh\nexport PYTHONPATH="{root}${{PYTHONPATH:+:$PYTHONPATH}}"\n'
-                 f'exec {sys.executable} -m bunnyhotkey "$@"\n')
+                 f'exec {sys.executable}{" -P" if sys.version_info >= (3, 11) else ""} -m bunnyhotkey "$@"\n')
+    # -P: run the installed copy even when the current folder is another Bunny Hot Key folder
     os.chmod(tmp, 0o755)
     os.replace(tmp, launcher)          # never a half-written launcher
     return launcher
@@ -641,6 +643,12 @@ def update(args):
     GitHub (git checkouts) or download and unpack it (ZIP installs), and refresh the desktop integration."""
     from . import __version__ as old
     integrated = _is_our_launcher(_launcher_path())
+    current = _launcher_root() if integrated else ""
+    if current and not _same(current, ROOT) and os.path.isdir(current):
+        # Python picked up the Bunny Hot Key folder you're in (e.g. a clone or a development checkout) instead
+        # of the installed one; updating would replace the install with that folder and then delete it
+        raise SystemExit(f"bhk: this is the Bunny Hot Key in {ROOT} (the current folder), not your install in "
+                         f"{current}.\nRun bhk update from another folder.")
     before_commit = _build_stamp(ROOT).get("commit", "")[:7]
     root = _install_app(ROOT)          # an older install outside ~/.local moves into BHK's own folder first
     if integrated:
@@ -669,7 +677,17 @@ def update(args):
         if latest and latest == _build_stamp(root).get("commit") and "--force" not in args:
             print(f"Bunny Hot Key is up to date ({old}, {latest[:7]}).")
         else:
-            _update_from_tarball(root, branch)
+            import tarfile
+            try:
+                _update_from_tarball(root, branch)
+            except urllib.error.HTTPError as e:
+                why = f"GitHub has no branch {branch}" if e.code == 404 else f"GitHub answered {e.code} {e.reason}"
+                raise SystemExit(f"bhk: update failed: {why}; nothing was changed")
+            except (OSError, tarfile.TarError, EOFError) as e:      # offline, timeout, cut-off download, full disk
+                reason = "the download was incomplete or damaged" if isinstance(e, (tarfile.TarError, EOFError)) \
+                    else getattr(e, "reason", None) or e
+                raise SystemExit(f"bhk: update failed ({reason}); nothing was changed. Check your internet "
+                                 "connection and run bhk update again.")
     sys.stdout.flush()
     if integrated:
         subprocess.run([sys.executable, "-m", "bunnyhotkey", "setup-desktop"], cwd=root,
@@ -685,38 +703,47 @@ def _update_from_tarball(root, branch):
     leaves a half-updated install.  Files you added inside the folder are kept."""
     import tarfile
     url = f"https://codeload.github.com/{REPO}/tar.gz/refs/heads/{branch}"
-    print(f"Downloading {url}")
+    print(f"Downloading {url}", flush=True)
     parent = os.path.dirname(os.path.realpath(root))
     new, old = root + ".new", root + ".old"
     for d in (new, old):
         if os.path.lexists(d):
             _rmtree(d, lambda p: True, "a leftover Bunny Hot Key update folder")
-    with tempfile.TemporaryDirectory(dir=parent, prefix=".bhk-update-") as tmp:
-        arc = os.path.join(tmp, "bhk.tar.gz")
-        with urllib.request.urlopen(url, timeout=60) as resp, open(arc, "wb") as fh:
-            shutil.copyfileobj(resp, fh)
-        with tarfile.open(arc) as tf:
-            tf.extractall(tmp, filter="data")
-            commit = tf.pax_headers.get("comment", "")        # GitHub names the commit in the archive header
-        src = next((os.path.join(tmp, d) for d in os.listdir(tmp) if os.path.isdir(os.path.join(tmp, d))), "")
-        if not _is_bhk_tree(src):
-            raise SystemExit("bhk: the download doesn't look like Bunny Hot Key; nothing was changed")
-        shutil.copytree(root, new, symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))
-        for name in os.listdir(src):           # the release replaces its own files; anything else you added stays
-            if name in APP_SKIP:
-                continue
-            dst = os.path.join(new, name)
-            if os.path.isdir(dst) and not os.path.islink(dst):
-                shutil.rmtree(dst)
-            elif os.path.lexists(dst):
-                os.remove(dst)
-            shutil.move(os.path.join(src, name), dst)
-        _write_stamp(new, {"commit": commit, "time": int(__import__("time").time())})
-    if not _is_bhk_tree(new):
-        _rmtree(new, lambda p: True, "a Bunny Hot Key update folder")
-        raise SystemExit("bhk: the update didn't unpack completely; nothing was changed")
+    try:
+        with tempfile.TemporaryDirectory(dir=parent, prefix=".bhk-update-") as tmp:
+            arc = os.path.join(tmp, "bhk.tar.gz")
+            with urllib.request.urlopen(url, timeout=60) as resp, open(arc, "wb") as fh:
+                shutil.copyfileobj(resp, fh)
+            with tarfile.open(arc) as tf:
+                tf.extractall(tmp, filter="data")
+                commit = tf.pax_headers.get("comment", "")        # GitHub names the commit in the archive header
+            src = next((os.path.join(tmp, d) for d in os.listdir(tmp) if os.path.isdir(os.path.join(tmp, d))), "")
+            if not _is_bhk_tree(src):
+                raise SystemExit("bhk: the download doesn't look like Bunny Hot Key; nothing was changed")
+            shutil.copytree(root, new, symlinks=True, ignore=shutil.ignore_patterns("__pycache__"))
+            for name in os.listdir(src):           # the release replaces its own files; anything else you added stays
+                if name in APP_SKIP:
+                    continue
+                dst = os.path.join(new, name)
+                if os.path.isdir(dst) and not os.path.islink(dst):
+                    shutil.rmtree(dst)
+                elif os.path.lexists(dst):
+                    os.remove(dst)
+                shutil.move(os.path.join(src, name), dst)
+            _write_stamp(new, {"commit": commit, "time": int(__import__("time").time())})
+        if not _is_bhk_tree(new):
+            _rmtree(new, lambda p: True, "a Bunny Hot Key update folder")
+            raise SystemExit("bhk: the update didn't unpack completely; nothing was changed")
+    except BaseException:
+        shutil.rmtree(new, ignore_errors=True)     # a failed download or a full disk leaves nothing behind
+        raise
     os.rename(root, old)
-    os.rename(new, root)
+    try:
+        os.rename(new, root)
+    except OSError:
+        os.rename(old, root)
+        shutil.rmtree(new, ignore_errors=True)
+        raise
     shutil.rmtree(old, ignore_errors=True)
     print(f"Installed the latest {branch} into {root}.")
 
