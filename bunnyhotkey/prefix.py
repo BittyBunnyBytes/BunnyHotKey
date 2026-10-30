@@ -50,3 +50,28 @@ def lib_dirs(script_dir: str) -> list[str]:
            os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "BunnyHotKey", "Lib"),
            os.path.join(ahk_dir(), "Lib")]
     return out
+
+
+def write_hashes():
+    """UX/installed-files.csv as AutoHotkey's installer writes it (Hash,Version,Path,Description; MD5, paths
+    relative to the install dir): the UX scripts find installed versions, their help files and updates by it."""
+    import hashlib
+    from .lib.win32shell import pe_string
+    root = ahk_dir()
+    if not os.path.isdir(os.path.join(root, "UX")):
+        return
+    rows = ["Hash,Version,Path,Description"]
+    for ver, info in sorted(installed_versions().items()):
+        d = info.get("path", "")
+        for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+            low = name.lower()
+            if not (low.startswith("autohotkey") and low.endswith((".exe", ".chm"))):
+                continue
+            f = os.path.join(d, name)
+            with open(f, "rb") as fh:
+                md5 = hashlib.md5(fh.read()).hexdigest().upper()
+            desc = pe_string(f, "FileDescription") if low.endswith(".exe") else ""
+            rel = os.path.relpath(f, root).replace("/", "\\")
+            rows.append(f'{md5},{ver},"{rel}","{desc}"')
+    with open(os.path.join(root, "UX", "installed-files.csv"), "w", encoding="utf-8", newline="\r\n") as fh:
+        fh.write("\n".join(rows) + "\n")

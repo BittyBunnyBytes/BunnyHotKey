@@ -2104,6 +2104,20 @@ def handle(req):
             c["w"].set_tooltip_text(c["w"].get_label().replace("_", ""))
             c["w"].set_label("")
         return True
+    if op == "setdefault":
+        c = ctrls[req["ctrl"]]
+        w = c["w"]
+        if req.get("on"):
+            w.set_can_default(True)
+            w.grab_default()
+        else:
+            top = w.get_toplevel()
+            if isinstance(top, Gtk.Window) and top.get_default_widget() is w:
+                top.set_default(None)
+        return True
+    if op == "recent":
+        Gtk.RecentManager.get_default().add_item(GLib.filename_to_uri(req["path"], None))
+        return True
     if op == "cue":
         c = ctrls[req["ctrl"]]
         if "tv" not in c:

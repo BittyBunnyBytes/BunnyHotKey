@@ -253,6 +253,9 @@ class MatchInfo(AhkObject):
     def find(self, name):
         p, o = super().find(name)
         if p is None and name.lower() not in ("__get", "__call", "__set") and self.m is not None:
+            if name.isdigit() and int(name) <= self.m.re.groups:     # m.1: a subpattern by number
+                from ..objects import Prop
+                return Prop(name, self.value(int(name))), self
             for k in self.m.re.groupindex:
                 if k.lower() == name.lower():
                     from ..objects import Prop

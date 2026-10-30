@@ -210,6 +210,17 @@ class Loader:
             pass
 
 
+def _is_bhk_process(pid):
+    """A live Bunny Hot Key process: a lock file left by a killed script may name a PID the system has since given
+    to an unrelated program, which must neither count as "already running" nor be sent SIGTERM."""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            argv = fh.read().split(b"\0")
+    except OSError:
+        return False
+    return any(a == b"bunnyhotkey" or a.endswith((b"/bunnyhotkey", b"/bhk")) for a in argv)
+
+
 class Program:
     """Runs a script from start to exit."""
 
@@ -494,7 +505,7 @@ class Program:
                     old = int(fh.read().strip() or 0)
             except (OSError, ValueError):
                 old = 0
-            if old and old != os.getpid() and os.path.exists(f"/proc/{old}"):
+            if old and old != os.getpid() and _is_bhk_process(old):
                 if mode == "ignore":
                     raise SystemExit(0)
                 if mode == "prompt" and not getattr(rt, "singleinstance_set", False) and not rt.options.get("force"):

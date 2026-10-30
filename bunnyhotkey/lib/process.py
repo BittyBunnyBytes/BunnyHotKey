@@ -84,6 +84,14 @@ def translate_command(target: str) -> list[str]:
         exe = _first_available(_TRANSLATE[low])
         if exe is None:
             throw("OSError", "The system cannot find the file specified.", target)
+        if low.startswith("explorer") and args and re.match(r"/(select|root|e),", args[0], re.I):
+            # explorer /select,"file": the file manager with the item selected (FileManager1), else its folder
+            item = host_path(args[0].split(",", 1)[1].strip('"'))
+            if args[0].lower().startswith("/select") and shutil.which("gdbus"):
+                return ["gdbus", "call", "--session", "--dest", "org.freedesktop.FileManager1", "--object-path",
+                        "/org/freedesktop/FileManager1", "--method", "org.freedesktop.FileManager1.ShowItems",
+                        "['" + _file_uri(item) + "']", ""]
+            return [exe, os.path.dirname(item) if args[0].lower().startswith("/select") else item]
         if low.startswith("cmd") and args and args[0].lower() in ("/c", "/k"):
             return ["sh", "-c", " ".join(args[1:])]
         return [exe] + [host_path(a) if ("\\" in a or a[1:3] == ":\\") else a for a in args]
@@ -110,14 +118,22 @@ def translate_command(target: str) -> list[str]:
     throw("OSError", "The system cannot find the file specified.", target)
 
 
+def _file_uri(path):
+    from urllib.parse import quote
+    return "file://" + quote(os.path.abspath(path))
+
+
 def _is_ahk_exe(hp, low):
     """A_AhkPath (BHK's own entry point) or an AutoHotkey executable named by a script."""
     main = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "__main__.py")
     if os.path.exists(hp) and os.path.realpath(hp) == os.path.realpath(main):
         return True
     base = os.path.basename(low.replace("\\", "/"))
-    return base in ("autohotkey.exe", "autohotkey64.exe", "autohotkey32.exe", "autohotkeyu64.exe",
-                    "autohotkeyu32.exe") and not os.path.isfile(hp)
+    if base not in ("autohotkey.exe", "autohotkey64.exe", "autohotkey32.exe", "autohotkeyu64.exe", "autohotkeyu32.exe"):
+        return False
+    from ..prefix import ahk_dir
+    # a name alone, or one of the official executables BHK installed into its prefix (the Dash's launch settings)
+    return not os.path.isfile(hp) or os.path.realpath(hp).startswith(os.path.realpath(ahk_dir()) + os.sep)
 
 
 _SYSTEM_VERBS = ("find", "explore", "open", "edit", "print", "properties")

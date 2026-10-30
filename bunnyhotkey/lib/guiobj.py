@@ -429,6 +429,18 @@ def _has_pos(opts):
         re.search(r"(?:^|\s)\+?[xy](?:m|p|s|[+-]\d|\d)", opts.lower()) is not None
 
 
+DEFAULT_BUTTONS: dict[int, int] = {}                # Gui wid -> cid of its default push button (DM_GETDEFID)
+
+
+def set_default_button(c, on=True):
+    """+Default on a Button (the one Enter presses); -Default leaves the window without one."""
+    if on:
+        DEFAULT_BUTTONS[c.gui.wid] = c.cid
+    elif DEFAULT_BUTTONS.get(c.gui.wid) == c.cid:
+        DEFAULT_BUTTONS.pop(c.gui.wid)
+    _srv().call("setdefault", ctrl=c.cid, on=bool(on))
+
+
 def gui_add(this, ctype, options="", text=UNSET):
     t = TYPE_ALIASES.get(S(ctype).lower())
     if t is None:
@@ -543,6 +555,8 @@ def gui_add(this, ctype, options="", text=UNSET):
     if (t != "UpDown" or ctrl.buddy is None) and t != "StatusBar":
         this.prev = ctrl
     CTRLS[ctrl.cid] = ctrl
+    if t == "Button" and flags.get("default"):
+        DEFAULT_BUTTONS[this.wid] = ctrl.cid
     if t == "Button":
         bs = 0
         for tok in re.findall(r"(?:^|\s)\+?(0x[0-9a-f]+|\d+)(?=\s|$)", opts, re.I):
@@ -716,6 +730,7 @@ def gui_destroy(this):
         _srv().call("destroy", win=this.wid)
         this.destroyed = True
         GUIS.pop(this.wid, None)
+        DEFAULT_BUTTONS.pop(this.wid, None)
         for c in this.ctrls:
             CTRLS.pop(c.cid, None)
         rt().gui_count = max(getattr(rt(), "gui_count", 1) - 1, 0)
@@ -845,6 +860,8 @@ def ctrl_opt(c, options):
             c.gui.names[c.name.lower()] = c
         elif t == "altsubmit":
             c.altsubmit = on
+        elif t == "default" and c.ctype == "Button":
+            set_default_button(c, on)
         elif t.startswith("range") and c.ctype in ("Slider", "Progress", "UpDown"):
             pass
     if style:

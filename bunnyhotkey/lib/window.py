@@ -1770,6 +1770,19 @@ def _builtin_message(c, win, msg, wp, lp):
             return False, 0
         d.flush()
         return True, 0
+    if msg in (0x400, 0x401) and c is None:                                    # DM_GETDEFID, DM_SETDEFID
+        from .guiobj import CTRLS, DEFAULT_BUTTONS, set_default_button
+        g = gui_for_window(win)
+        if g is None:
+            return False, 0
+        if msg == 0x401:
+            b = CTRLS.get(wp & 0xFFFF)
+            if b is None or b.gui is not g:
+                return True, 0
+            set_default_button(b)
+            return True, 1
+        cid = DEFAULT_BUTTONS.get(g.wid)
+        return True, (0x534B << 16 | cid) if cid else 0                     # MAKELONG(id, DC_HASDEFID)
     if c is None:
         return False, 0
     t = c.ctype

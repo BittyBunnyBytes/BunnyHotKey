@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import threading
 import time
@@ -135,6 +136,16 @@ def seed_defaults():
         n = _node("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", True)
         n["values"].setdefault("ProductName", ["REG_SZ", "Windows 10 Pro (Bunny Hot Key)"])
         n["values"].setdefault("CurrentBuild", ["REG_SZ", "19045"])
+        # where `bhk install` put AutoHotkey, as its installer records it (the UX scripts' ROOT_DIR)
+        from ..prefix import ahk_dir, installed_versions, write_hashes
+        if os.path.isdir(os.path.join(ahk_dir(), "UX")):
+            if not os.path.exists(os.path.join(ahk_dir(), "UX", "installed-files.csv")):
+                write_hashes()                              # installs from before BHK wrote it
+            n = _node("HKLM\\SOFTWARE\\AutoHotkey", True)
+            n["values"]["InstallDir"] = ["REG_SZ", ahk_dir()]
+            vers = sorted(installed_versions(), key=lambda v: [int(x) if x.isdigit() else 0 for x in re.split(r"[.-]", v)])
+            if vers:
+                n["values"]["Version"] = ["REG_SZ", vers[-1]]
         _save()
 
 

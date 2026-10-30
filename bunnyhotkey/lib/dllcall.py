@@ -357,8 +357,19 @@ def DllCall(func, *args):
         key = key[:-4]
     h = EMU.get(key) or EMU.get(key.rstrip("w").rstrip("a"))
     if h is not None:
-        return h(pairs)
+        r = h(pairs)
+        if ret.lower().strip() == "hresult" and type(r) is int and r & 0x80000000:
+            throw("OSError", f"(0x{r & 0xFFFFFFFF:08X}) {_hresult_text(r)}", name)   # FAILED(hr): never returned
+        return r
     throw("Error", f"DllCall: {fn} is a Windows API that Bunny Hot Key does not emulate yet.", name)
+
+
+def _hresult_text(hr):
+    hr &= 0xFFFFFFFF
+    return {0x80070002: "The system cannot find the file specified.",
+            0x80070483: "No application is associated with the specified file for this operation.",
+            0x80004001: "Not implemented", 0x80004002: "No such interface supported", 0x80004003: "Invalid pointer",
+            0x80004005: "Unspecified error", 0x80070057: "The parameter is incorrect."}.get(hr, "")
 
 
 # ---------------------------------------------------------------- callbacks and calls by address
@@ -1209,3 +1220,4 @@ EMU.update({
 
 from . import win32emu  # noqa: E402,F401  (registers more of the Win32 API into EMU)
 from . import win32gdi  # noqa: E402,F401  (GDI: DCs, bitmaps, BitBlt)
+from . import win32shell  # noqa: E402,F401  (version resources, shell32/shlwapi lookups, dialog control IDs)
