@@ -305,7 +305,7 @@ def logical_lines(text, filename, ltrim_default=False):
         ln = i2
         i = i2
         buf, i = section(s, i)
-        if not _special(buf):
+        if not _special(buf) or re.match(r'#If\s', buf, re.I):      # #If's expression can continue; other directives can't
             while True:
                 nxt, k = code_line_peek(i)
                 if nxt is None or _special(nxt) or nxt.startswith(('++', '--')) or not _CONT_START.match(nxt):
@@ -945,7 +945,7 @@ class Translator:
                     nm = re.match(r'\s*(' + NAME + r'+)', part)
                     if nm:
                         self.superglobals.append(nm[1])
-            if t.startswith('{') or t.endswith('{'):
+            if (t.startswith('{') and not t.startswith('{::')) or t.endswith('{'):
                 depth += t.count('{') if t.strip('{ ') == '' else 1
             if t.startswith('}'):
                 depth -= len(t) - len(t.lstrip('}').lstrip()) and t.count('}', 0, len(t) - len(t.lstrip('} '))) or 1
@@ -1046,7 +1046,7 @@ class Translator:
             self.emit(self.block_open())
             self.open_block()
             return
-        if t.startswith('{') and not t.startswith('{}'):
+        if t.startswith('{') and not t.startswith('{}') and not (t.startswith('{::') and not self.stack):
             self.emit(self.block_open())                # "{ statement" opens a block and runs the statement
             self.open_block()
             return self.do_line(t[1:].strip())
@@ -1157,6 +1157,9 @@ class Translator:
 
     # ------------------------------------------------------------ classes
     def class_member(self, t):
+        m = re.fullmatch(r'var\s+(' + NAME + r'+)\s*(:=.*)?', t, re.I | re.S)     # AutoHotkey_L before v1.1
+        if m:
+            t = m[1] + (m[2] or ' := ""')
         m = re.match(r'class\s+(' + NAME + r'+)(?:\s+extends\s+([\w.]+))?\s*(\{)?$', t, re.I)
         if m:
             return self.class_head(m)

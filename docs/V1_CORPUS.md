@@ -1,6 +1,6 @@
 # AutoHotkey v1 script corpus
 
-**319 of 327** public AutoHotkey v1 scripts load and compile in BHK's v1 frontend (`bhk --validate`: continuation sections, translation, parsing, compilation; the scripts aren't run).
+**321 of 327** public AutoHotkey v1 scripts load and compile in BHK's v1 frontend (`bhk --validate`: continuation sections, translation, parsing, compilation; the scripts aren't run).
 
 The corpus holds the v1 scripts from these repositories that pass a conservative safety filter (`tools/v1_corpus_audit.py`: no process launching, file writes, registry, network, clipboard, native memory, window control, dynamic code, `#Include` or input outside hotkeys), so it is mostly libraries, functions, classes and hotkey scripts:
 
@@ -28,5 +28,3 @@ Rebuild and measure with `python3 tools/v1_corpus.py fetch` and `python3 tools/v
 | AHK-libs-and-classes-collection: `libs/g-n/Math.ahk` | line 890: Unexpected token |
 | AHK-libs-and-classes-collection: `classes/class_Linear.ahk` | line 1: Unknown class. |
 | AHK-libs-and-classes-collection: `classes/class_OGdip-Geometry.ahk` | line 123: Unknown class. |
-| AHK-libs-and-classes-collection: `classes/class_Regex (2).ahk` | line 6: Unexpected token in class body |
-| AHKs: `thirdParty/lib/Regex.ahk` | line 6: Unexpected token in class body |

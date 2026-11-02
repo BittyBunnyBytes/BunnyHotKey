@@ -31,6 +31,8 @@ END_STMT_OPS = {")", "]", "}", ":"}
 
 
 class Parser:
+    hoisted = None      # parse_program's list of functions a hotkey or hotstring defined
+
     def __init__(self, lines: list[LogicalLine] | None, filename: str = "", toks: list[Tok] | None = None):
         self.filename = filename
         if toks is not None:
@@ -173,6 +175,7 @@ class Parser:
     # ------------------------------------------------------------ program
     def parse_program(self) -> list[A.Node]:
         stmts = []
+        self.hoisted = []
         while True:
             self.skip_nl()
             if self.peek().kind == "end":
@@ -180,6 +183,8 @@ class Parser:
             if self.is_op("}"):
                 self.error('Unexpected "}"')
             stmts.append(self.parse_statement(top=True))
+            stmts += self.hoisted
+            self.hoisted = []
         return stmts
 
     def parse_block(self) -> A.Block:
@@ -848,6 +853,20 @@ class Parser:
             return self.parse_block()
         return None
 
+    def _named_hot_func(self, t):
+        """A function definition right under "key::" is the hotkey's function, still callable by name (script.cpp DefineFunc)."""
+        name, paren = self.peek(), self.peek(1)
+        if self.hoisted is None or name.kind != "id" or name.val.lower() in KEYWORDS \
+                or paren.kind != "op" or paren.val != "(" or paren.ws:
+            return None
+        fd = self.try_funcdef()
+        if fd is None:
+            return None
+        self.hoisted.append(fd)
+        loc = self.L(t)
+        call = A.Call(A.Var(fd.name, **loc), [A.Var("ThisHotkey", **loc)], False, **loc)
+        return A.Block([A.ExprStmt(call, **loc)], **loc)
+
     def parse_hotkey(self):
         t = self.next()
         keys, rest = t.val
@@ -872,8 +891,16 @@ class Parser:
                         return A.HotkeyDef(stack, None, nt.val[1].strip(), None, **loc)
                     body = self._hot_body(nt, True)
                     return A.HotkeyDef(stack, body, None, None, **loc)
+                if nt.kind == "hotstring" and not nt.val[2]:
+                    # a hotstring stacked under the hotkey: they share its function
+                    shared = self.parse_hotstring()
+                    last = shared.body[-1] if isinstance(shared, A.Block) else shared
+                    if last.body is None:
+                        self.error("Hotkey or hotstring is missing its opening brace", t)
+                    return A.Block([A.HotkeyDef(stack, last.body, None, None, **loc),
+                                    *(shared.body if isinstance(shared, A.Block) else [shared])], **loc)
                 break
-            body = self._hot_body(t, False)
+            body = self._hot_body(t, False) or self._named_hot_func(t)
             if body is None:
                 self.error("Hotkey or hotstring is missing its opening brace", t)
             return A.HotkeyDef(stack, body, None, None, **loc)
@@ -894,6 +921,9 @@ class Parser:
         self.skip_nl()
         if self.is_op("{"):
             body = self.parse_block()
+            return A.HotstringDef(opts, trig, None, body, None, **loc)
+        body = self._named_hot_func(t)
+        if body is not None:
             return A.HotstringDef(opts, trig, None, body, None, **loc)
         nt = self.peek()
         if nt.kind in ("hotstring", "hotkey"):

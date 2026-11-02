@@ -365,6 +365,8 @@ class SourceReader:
     def _is_special_line(buf: str) -> bool:
         if classify_hot_line(buf) is not None:
             return True
+        if re.match(r"#HotIf\s", buf, re.I):      # script.cpp: its expression can span lines
+            return False
         return buf.startswith("#") and re.match(r"#\w+", buf) is not None
 
     def _merge_continuation(self, buf: str, ln: int) -> str:
