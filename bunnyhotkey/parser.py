@@ -40,6 +40,7 @@ class Parser:
         else:
             self.toks = self._build_stream(lines or [])
         self.i = 0
+        self.loop_depth = 0
 
     # ------------------------------------------------------------ token stream
     def _build_stream(self, lines: list[LogicalLine]) -> list[Tok]:
@@ -77,6 +78,8 @@ class Parser:
                 out.append(self._nl(ll))
                 continue
             cls = classify_hot_line(text)
+            if not cls and (bad := re.match(r"(\w+)::", text)):
+                raise AhkSyntaxError("Invalid hotkey.", ll.file, ll.line, bad.group(1))
             if cls and cls[0] == "hotstring":
                 _, opts, trig, rest = cls
                 t = Tok("hotstring", (opts, trig, rest), False)
@@ -287,7 +290,11 @@ class Parser:
             body = A.Block([A.Return(e, **loc)], **loc)
             return A.FuncDef(name_t.val, params, body, is_static, True, is_method, kind, **loc)
         self.skip_nl()
-        body = self.parse_block()
+        depth, self.loop_depth = self.loop_depth, 0
+        try:
+            body = self.parse_block()
+        finally:
+            self.loop_depth = depth
         return A.FuncDef(name_t.val, params, body, is_static, False, is_method, kind, **loc)
 
     def _match_paren(self, j):
@@ -451,10 +458,21 @@ class Parser:
             return self.parse_expr(0)
         return None
 
+    def _loop_body(self):
+        self.loop_depth += 1
+        try:
+            return self.parse_body()
+        finally:
+            self.loop_depth -= 1
+
+    def _check_in_loop(self, t):
+        if not self.loop_depth:      # script.cpp PreparseBlocks: a loop outside the current function doesn't count
+            self.error("Break/Continue must be enclosed by a Loop.", t)
+
     def st_while(self):
         t = self.next()
         cond = self.parse_expr(0)
-        body = self.parse_body()
+        body = self._loop_body()
         node = A.While(cond, body, self._until(), None, **self.L(t))
         node.orelse = self._loop_else()
         return node
@@ -484,7 +502,7 @@ class Parser:
         else:
             if not self.at_eol() and not self.brace_is_block():
                 args.append(self.parse_expr(0))
-        body = self.parse_body()
+        body = self._loop_body()
         node = A.Loop(kind, args, body, self._until(), None, **loc)
         node.orelse = self._loop_else()
         return node
@@ -518,7 +536,7 @@ class Parser:
         it = self.parse_expr(6)
         if paren:
             self.expect_op(")")
-        body = self.parse_body()
+        body = self._loop_body()
         node = A.For(names, it, body, self._until(), None, **self.L(t))
         node.orelse = self._loop_else()
         return node
@@ -589,6 +607,7 @@ class Parser:
 
     def st_break(self):
         t = self.next()
+        self._check_in_loop(t)
         label = None
         if not self.at_eol() and not self.is_op("}"):
             lt = self.next()
@@ -597,6 +616,7 @@ class Parser:
 
     def st_continue(self):
         t = self.next()
+        self._check_in_loop(t)
         label = None
         if not self.at_eol() and not self.is_op("}"):
             lt = self.next()

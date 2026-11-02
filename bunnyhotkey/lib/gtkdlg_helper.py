@@ -1,4 +1,9 @@
 """GTK3 dialog helper process: reads one JSON request on stdin, writes the answer as JSON on stdout."""
+try:                                  # shown as this name in task managers instead of python3
+    import ctypes
+    ctypes.CDLL(None).prctl(15, b"bhk-dialog", 0, 0, 0)
+except (OSError, AttributeError):
+    pass
 import json
 import sys
 

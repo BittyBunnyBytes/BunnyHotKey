@@ -557,6 +557,9 @@ def uninstall_self(args):
         os.remove(f)
         removed += 1
     setup = _load_setup()
+    # only an install that registered it: another user's or a scratch HOME's uninstall leaves the system setting alone
+    if setup.get("exec_registered") and _exec_registered() and setup_exec(["--remove"]):
+        print("Left the system's executable .ahk setting in place; bhk-exec will report Bunny Hot Key is missing.")
     _forget_association(remove_if_empty=setup.get("mimeapps_existed") is False)
     prev = setup.get("previous_default")
     if prev and prev != "bunnyhotkey.desktop" and shutil.which("xdg-mime"):
@@ -865,6 +868,69 @@ def setup_desktop(args):
         os.makedirs(os.path.dirname(_mimeapps_files()[0]), exist_ok=True)   # xdg-mime silently fails without it
         subprocess.run(["xdg-mime", "default", "bunnyhotkey.desktop", MIME], capture_output=True)
     print(f"Installed launcher {launcher}, icon, .ahk file type and menu entry (Bunny Hot Key is in {root}).")
+    if not _exec_registered():
+        print("To run .ahk files marked executable (./script.ahk, \"allow executing as a program\"): bhk setup-exec")
+    return 0
+
+
+# An executable file with no "#!" line can't be started by the kernel, and shells and GLib then hand it to /bin/sh,
+# which runs the AutoHotkey script as shell commands.  binfmt_misc is what sends these files to bhk by extension.
+# Registering it needs root; the helper finds each user's own launcher, so the system files name no home folder.
+_BINFMT_DIR = "/proc/sys/fs/binfmt_misc"
+_BINFMT_CONF = "/etc/binfmt.d/bunnyhotkey.conf"
+_BINFMT_HELPER = "/usr/local/bin/bhk-exec"
+_BINFMT_RULES = {"bhk": "ahk", "bhk-upper": "AHK"}      # extension matching is case-sensitive
+
+
+def _exec_registered():
+    return all(os.path.exists(os.path.join(_BINFMT_DIR, name)) for name in _BINFMT_RULES)
+
+
+def _exec_root_script(remove):
+    lines = ["set -e"]
+    for name in _BINFMT_RULES:
+        entry = f"{_BINFMT_DIR}/{name}"
+        lines.append(f"if [ -e {entry} ]; then echo -1 > {entry}; fi")
+    if remove:
+        lines.append(f"rm -f {_BINFMT_CONF} {_BINFMT_HELPER}")
+        return "\n".join(lines) + "\n"
+    helper = ('#!/bin/sh\n'
+              'bhk="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}/.local/bin/bhk"\n'
+              'if [ ! -x "$bhk" ]; then echo "bhk-exec: Bunny Hot Key is not installed for this user ($bhk)" >&2; exit 127; fi\n'
+              'exec "$bhk" "$@"\n')
+    rules = "".join(f":{name}:E::{ext}::{_BINFMT_HELPER}:\n" for name, ext in _BINFMT_RULES.items())
+    lines += [f"mkdir -p {os.path.dirname(_BINFMT_HELPER)} {os.path.dirname(_BINFMT_CONF)}",
+              f"cat > {_BINFMT_HELPER} <<'BHK_EOF'\n{helper}BHK_EOF",
+              f"chmod 755 {_BINFMT_HELPER}",
+              f"cat > {_BINFMT_CONF} <<'BHK_EOF'\n{rules}BHK_EOF"]
+    lines += [f"echo '{rule}' > {_BINFMT_DIR}/register" for rule in rules.splitlines()]
+    return "\n".join(lines) + "\n"
+
+
+def _run_as_root(script):
+    if os.geteuid() == 0:
+        cmd = ["/bin/sh", "-c", script]
+    elif sys.stdin.isatty() and shutil.which("sudo"):
+        cmd = ["sudo", "/bin/sh", "-c", script]
+    elif shutil.which("pkexec"):
+        cmd = ["pkexec", "/bin/sh", "-c", script]
+    else:
+        return False
+    return subprocess.run(cmd).returncode == 0
+
+
+def setup_exec(args):
+    """bhk setup-exec [--remove]: make .ahk files marked executable run with bhk, wherever they are started from."""
+    remove = "--remove" in args
+    if not _run_as_root(_exec_root_script(remove)):
+        print("Nothing was changed: root permission wasn't given." if not remove else
+              "Couldn't get root permission; run bhk setup-exec --remove again to finish.")
+        return 1
+    setup = _load_setup()
+    setup["exec_registered"] = not remove
+    _save_setup(setup)
+    print("Executable .ahk files no longer run with bhk." if remove else
+          "Executable .ahk files now run with bhk, also after a reboot.")
     return 0
 
 
@@ -886,6 +952,7 @@ def doctor(args):
     except (ImportError, ValueError):
         gtk = "no  (install PyGObject + GTK 3 -> Gui, MsgBox, InputBox, ToolTip, tray)"
     print(f"GTK 3:         {gtk}")
+    print(f"Executable .ahk: {'yes' if _exec_registered() else 'no  (bhk setup-exec)'}")
     for tool in ("wine", "zenity", "kdialog", "notify-send", "wpctl", "xclip", "wl-copy"):
         print(f"{tool + ':':15}{'yes' if shutil.which(tool) else 'no'}")
     return 0
@@ -910,6 +977,8 @@ def command(cmd, args, options):
         return new_script(args)
     if cmd == "setup-desktop":
         return setup_desktop(args)
+    if cmd == "setup-exec":
+        return setup_exec(args)
     if cmd == "doctor":
         return doctor(args)
     raise SystemExit(f"bhk: unknown command {cmd}")

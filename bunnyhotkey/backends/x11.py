@@ -61,6 +61,7 @@ class X11Backend:
         self.sent_down: set[int] = set()         # keys the script is holding down via XTest
         self.inj_keys: set[int] = set()          # keycodes / buttons this process pressed and hasn't released yet:
         self.inj_buttons: set[int] = set()       # the X server keeps fake presses down after the client is gone
+        self.held_watcher = None                 # releases them if this process dies without cleaning up
         from .modmap import ModifierBlock
         self.modblock = ModifierBlock()
         self.mod_released: set[int] = set()      # suppressed modifiers whose keyboard grab was let go
@@ -78,6 +79,8 @@ class X11Backend:
     def start(self):
         self.inj = xlib.Display()
         self.ev = xlib.Display()
+        from .heldinput import HeldInputWatcher
+        self.held_watcher = HeldInputWatcher(self.inj)
         x = self.ev.x
         try:
             x.XkbSetDetectableAutoRepeat.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
@@ -97,6 +100,9 @@ class X11Backend:
         if self.thread:
             self.thread.join(1.0)
         self.release_injected()
+        if self.held_watcher is not None:
+            self.held_watcher.done()
+            self.held_watcher = None
         if self.modblock.removed:
             try:
                 self.modblock.restore(xlib.Display())
@@ -118,6 +124,8 @@ class X11Backend:
                 self.inj_keys.clear()
                 self.inj_buttons.clear()
                 self.inj.x.XSync(self.inj.dpy, 0)
+                if self.held_watcher is not None:
+                    self.held_watcher.clear()
         except Exception:
             pass
 
@@ -505,6 +513,8 @@ class X11Backend:
             level = 0
         with self.inj_lock:
             self.sent.append([code, bool(down), level, time.monotonic(), False, False])
+            if self.held_watcher is not None:
+                self.held_watcher.key(code + 8, down)
             t.XTestFakeKeyEvent(self.inj.dpy, code + 8, 1 if down else 0, 0)
             (self.inj_keys.add if down else self.inj_keys.discard)(code + 8)
 
@@ -575,6 +585,8 @@ class X11Backend:
             return
         t = xlib.Xtst()
         with self.inj_lock:
+            if self.held_watcher is not None:
+                self.held_watcher.button(btn, down)
             t.XTestFakeButtonEvent(self.inj.dpy, btn, 1 if down else 0, 0)
             (self.inj_buttons.add if down else self.inj_buttons.discard)(btn)
 

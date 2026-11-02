@@ -34,12 +34,19 @@ class Loader:
                 raise AhkSyntaxError(f"Script file not found.", path, 0, str(e))
             from .lib.files import decode_file
             text = decode_file(data, "UTF-8")
+        # a "#!/usr/bin/env bhk" first line is for the kernel; "#!/::" stays a hotkey (Win+Alt+/).  The line stays, empty,
+        # so error messages keep their line numbers.
+        m = re.match(r"#!\s*/[^\r\n]*", text)
+        if m and "::" not in m.group():
+            text = text[m.end():]
         real = os.path.realpath(path) if path != "*" else "*"
         rt.included.add(real.lower())
         rt.files.append(path)
         if getattr(rt, "script_version", None) is None:
             from .legacy import detect_text
             rt.script_version = detect_text(text, rt.options.get("ahk_version", "auto"))
+        from . import lexer
+        lexer.ALLOW_DIGIT_NAMES = rt.script_version == "1"
         if rt.script_version == "1":
             from .legacy import logical_lines
             lines = logical_lines(text, path)
@@ -300,10 +307,6 @@ class Program:
         if rt.hotmgr is not None and (rt.hotkeys.hotkeys or rt.hotstrings.items):
             from .backends import get_backend
             get_backend(rt).refresh()
-        try:
-            signal.signal(signal.SIGTERM, lambda *a: self._sigterm())
-        except ValueError:
-            pass
         code = 0
         reason = "Exit"
         try:
@@ -341,9 +344,28 @@ class Program:
         self.shutdown()
         return code
 
-    def _sigterm(self):
-        self.rt.exiting = True
-        raise ExitAppEx(0)
+    def terminate(self):
+        """SIGTERM (called on Python's main thread, while the script runs on its own): let go of held input at once,
+        then exit like ExitApp, with OnExit, at the script's next interruption point.  A script that never reaches
+        one (Critical, a blocking call) is cut off after a few seconds."""
+        rt = self.rt
+        release = getattr(rt.backend, "release_injected", None)
+        if release is not None:
+            release()
+
+        def exit_now():
+            rt.exiting = True
+            raise ExitAppEx(0)
+
+        def force():
+            try:
+                self.shutdown()
+            finally:
+                os._exit(0)
+        timer = threading.Timer(3.0, force)
+        timer.daemon = True
+        timer.start()
+        rt.post(exit_now, priority=2 ** 31)
 
     def on_exit(self, reason, code):
         rt = self.rt

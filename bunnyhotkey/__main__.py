@@ -10,12 +10,25 @@
   bhk dash | windowspy | launcher  run AutoHotkey's own UX scripts from the newest install
   bhk new NAME                   create a new script from AutoHotkey's template
   bhk setup-desktop              install into ~/.local/share/BunnyHotKey/app, register .ahk files, icon, menu entry
+  bhk setup-exec [--remove]      make .ahk files marked executable run with bhk (./script.ahk, file managers); asks for root
   bhk doctor                     check X11/Wayland input permissions and optional tools
 """
 from __future__ import annotations
 
 import os
+import signal
 import sys
+
+_program = None      # the running script, for the SIGTERM handler
+
+
+def _on_sigterm(signum, frame):
+    """Python only delivers signals to its main thread, so this is installed here and not by the script's thread."""
+    if _program is None:      # a command like bhk install, or a script not created yet: the default action
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+        return
+    _program.terminate()
 
 
 def main(argv=None) -> int:
@@ -67,7 +80,7 @@ def main(argv=None) -> int:
         return manager.launch_dash()
     cmd = argv[0]
     if cmd in ("install", "versions", "list", "uninstall", "dash", "windowspy", "launcher", "new", "setup-desktop",
-               "doctor", "update") and not os.path.exists(cmd):
+               "setup-exec", "doctor", "update") and not os.path.exists(cmd):
         from . import manager
         return manager.command(cmd, argv[1:], options)
     if cmd == "run":
@@ -88,6 +101,8 @@ def main(argv=None) -> int:
     from .loader import Program
     sys.setrecursionlimit(20000)
     prog = Program(script, args, options)
+    global _program
+    _program = prog
     if options.get("errorstdout"):
         prog.rt.directives["ErrorStdOut"] = "UTF-8"
     try:
@@ -98,6 +113,16 @@ def main(argv=None) -> int:
     except BaseException:
         _cleanup(prog)       # a crash still lets go of held keys/buttons and restores the modifier map
         raise
+
+
+def _name_process():
+    """Task managers list a process by its kernel name, which would otherwise be python3.  /proc/PID/cmdline stays as
+    it is (the install and #SingleInstance code recognise BHK by it)."""
+    try:
+        import ctypes
+        ctypes.CDLL(None).prctl(15, b"bhk", 0, 0, 0)        # PR_SET_NAME
+    except (OSError, AttributeError):
+        pass
 
 
 def _cleanup(prog):
@@ -119,6 +144,8 @@ if __name__ == "__main__":
             if isinstance(e.code, str):
                 print(e.code, file=sys.stderr)
             result["code"] = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+    _name_process()                    # on the main thread: that's the name the process is listed under
+    signal.signal(signal.SIGTERM, _on_sigterm)
     t = threading.Thread(target=run, name="bhk-script")
     t.start()
     t.join()

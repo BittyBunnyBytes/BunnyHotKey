@@ -376,7 +376,7 @@ class SourceReader:
             return buf
         balance, open_quote = balance_expr(body, 0, expect)
         if open_quote:
-            raise AhkSyntaxError(f"Missing {open_quote}", self.filename, ln)
+            raise AhkSyntaxError("Missing close-quote", self.filename, ln)
         if balance < 0:
             raise AhkSyntaxError("Unexpected closing bracket", self.filename, ln)
         first_word = _first_word(re.sub(r"^[}\s]+", "", buf))
@@ -411,7 +411,7 @@ class SourceReader:
                 if not had:
                     break
             if open_quote:
-                raise AhkSyntaxError(f"Missing {open_quote}", self.filename, ln)
+                raise AhkSyntaxError("Missing close-quote", self.filename, ln)
             if balance < 0:
                 raise AhkSyntaxError("Unexpected closing bracket", self.filename, ln)
 
@@ -502,6 +502,9 @@ NUM_RE = re.compile(r"0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
 IDENT_START = re.compile(r"[A-Za-z_\u0080-￿]")
 
 
+ALLOW_DIGIT_NAMES = False      # set by the loader for v1 scripts
+
+
 def tokenize(src: str, filename: str = "", line: int = 0) -> list[Tok]:
     toks: list[Tok] = []
     i = 0
@@ -517,7 +520,7 @@ def tokenize(src: str, filename: str = "", line: int = 0) -> list[Tok]:
         if c in "\"'":
             j = _find_text_delim(src, i + 1, c)
             if j >= n:
-                raise AhkSyntaxError(f"Missing {c}", filename, line)
+                raise AhkSyntaxError("Missing close-quote", filename, line)
             toks.append(Tok("str", unescape(src[i + 1:j]), ws, start))
             i = j + 1
             ws = False
@@ -536,8 +539,10 @@ def tokenize(src: str, filename: str = "", line: int = 0) -> list[Tok]:
             end = m.end()
             # "1." followed by identifier char => member access on integer, e.g. 1.Foo (rare); keep simple
             if end < n and _is_ident_char(src[end]) and not text.lower().startswith("0x"):
-                # identifiers can start with digits in AHK? (e.g. 1abc is a valid var name) -> treat as id
+                # v1 allows names like 1abc; v2 doesn't (Var::ValidateName)
                 m2 = re.compile(r"[\w\u0080-￿]+").match(src, i)
+                if not ALLOW_DIGIT_NAMES:
+                    raise AhkSyntaxError("This name starts with a number, which is not allowed.", filename, line, m2.group(0))
                 toks.append(Tok("id", m2.group(0), ws, start))
                 i = m2.end()
                 ws = False

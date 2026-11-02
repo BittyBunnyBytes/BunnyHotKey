@@ -89,6 +89,7 @@ No pip packages are needed.
 ## Use
 ```sh
 bhk script.ahk [args...]   # run a script (also: double-click .ahk files after setup-desktop)
+./script.ahk               # marked executable ("allow executing as a program"): run once `bhk setup-exec` (asks for root)
 bhk --console script.ahk   # errors to the terminal instead of a dialog (like /ErrorStdOut)
 bhk --validate script.ahk  # load-time check only
 bhk windowspy              # AutoHotkey's own Window Spy (after `bhk install`)

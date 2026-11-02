@@ -7,6 +7,11 @@ Protocol: one JSON object per line.
 Windows use Gtk.Fixed so AutoHotkey's absolute x/y/w/h layout carries over.  Controls inside a Tab are siblings
 in the same Gtk.Fixed and are shown/hidden as pages change, the way Win32 tab controls work.
 """
+try:                                  # shown as this name in task managers instead of python3
+    import ctypes
+    ctypes.CDLL(None).prctl(15, b"bhk-gui", 0, 0, 0)
+except (OSError, AttributeError):
+    pass
 import datetime as dt
 import itertools
 import json
